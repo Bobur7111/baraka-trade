@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Biz haqimizda - Baraka Market{% endblock %}
+
+{% block extra_head %}
+<style>
+    .profile-card img { transition: transform 0.3s ease; }
+    .profile-card img:hover { transform: scale(1.1); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="max-w-3xl mx-auto mt-12 bg-white p-8 rounded-2xl shadow-2xl profile-card">
+    {% if admin_info %}
+        <div class="text-center mb-6">
+            <img src="{{ admin_info.photo.url }}" alt="{{ admin_info.full_name }}"
+                 class="w-40 h-40 object-cover rounded-full mx-auto border-4 border-green-500 shadow-lg">
+        </div>
+
+        <div class="text-center space-y-2 text-gray-800">
+            <p class="text-3xl font-bold">{{ admin_info.full_name }}</p>
+            <p class="text-lg">📞 {{ admin_info.phone_number }}</p>
+            <p class="text-lg">📍 {{ admin_info.address }}</p>
+        </div>
+    {% else %}
+        <p class="text-center text-red-500 font-medium">Admin ma'lumotlari qo‘shilmagan.</p>
+    {% endif %}
+
+    <div class="text-center mt-8">
+        <a href="{% url 'home' %}" class="bg-blue-600 text-white px-6 py-3 rounded-lg shadow hover:bg-blue-700 transition">
+            🏠 Bosh sahifaga qaytish
+        </a>
+    </div>
+</div>
+{% endblock %}

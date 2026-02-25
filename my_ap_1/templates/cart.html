@@ -1,0 +1,56 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block content %}
+<div class="container mx-auto my-10">
+    <h2 class="text-3xl font-bold mb-6 text-gray-800">🛒 Savatcha</h2>
+
+    {% if cart_items %}
+        <div class="overflow-x-auto shadow-lg rounded-xl">
+            <table class="min-w-full bg-white rounded-xl">
+                <thead class="bg-gray-800 text-white">
+                    <tr>
+                        <th class="py-3 px-4">Rasm</th>
+                        <th class="py-3 px-4">Nomi</th>
+                        <th class="py-3 px-4">Narxi</th>
+                        <th class="py-3 px-4">Soni</th>
+                        <th class="py-3 px-4">Jami</th>
+                        <th class="py-3 px-4">Amal</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in cart_items %}
+                    <tr class="text-center border-b hover:bg-gray-100 transition">
+                        <td class="py-2 px-4"><img src="{{ item.product.image.url }}" alt="{{ item.product.name }}" class="w-16 h-16 object-cover rounded-lg mx-auto"></td>
+                        <td>{{ item.product.name }}</td>
+                        <td>{{ item.product.price }} so'm</td>
+                        <td>
+                            <form method="POST" action="{% url 'update_cart' item.product.id %}" class="flex justify-center items-center gap-2">
+                                {% csrf_token %}
+                                <input type="number" name="quantity" value="{{ item.quantity }}" min="1" class="border rounded-lg w-16 py-1 text-center">
+                                <button type="submit" class="bg-green-500 text-white px-3 py-1 rounded-lg hover:bg-green-600 transition">Yangilash</button>
+                            </form>
+                        </td>
+                        <td>{{ item.item_total }} so'm</td>
+                        <td>
+                            <a href="{% url 'remove_from_cart' item.product.id %}" class="bg-red-500 text-white px-3 py-1 rounded-lg hover:bg-red-600 transition">O‘chirish</a>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="mt-6 flex justify-between items-center">
+            <h3 class="text-2xl font-bold text-gray-800">Umumiy summa: <span class="text-green-600">{{ total_price }} so'm</span></h3>
+            <!-- Telegram tugmasi -->
+            <a href="https://t.me/Boburbekk_name_bot?start=cart" target="_blank"
+               class="bg-blue-600 text-white px-6 py-3 rounded-lg shadow hover:bg-blue-700 transition">
+               💳 To‘lov qilish
+            </a>
+        </div>
+    {% else %}
+        <p class="text-center text-gray-500 text-lg mt-6">Savatchangiz bo‘sh. Mahsulot qo‘shishni boshlang!</p>
+    {% endif %}
+</div>
+{% endblock %}

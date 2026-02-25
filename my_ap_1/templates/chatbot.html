@@ -1,0 +1,31 @@
+<form id="chat-form" class="mb-4">
+    {% csrf_token %}
+    <input type="text" name="user_input" id="user_input"
+           placeholder="Savolingizni kiriting..." class="border px-4 py-2 rounded w-full">
+    <button type="submit" class="bg-purple-600 text-white px-6 py-2 rounded mt-2 hover:bg-purple-700">Yuborish</button>
+</form>
+
+<div id="chat-output" class="mt-4 p-4 border rounded bg-gray-100"></div>
+
+<script>
+const form = document.getElementById('chat-form');
+form.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const input = document.getElementById('user_input').value;
+    const csrf = document.querySelector('[name=csrfmiddlewaretoken]').value;
+
+    if (!input.trim()) return;
+
+    const response = await fetch("{% url 'chat_with_ai' %}", {  // mos nom
+        method: "POST",
+        headers: {
+            "Content-Type": "application/json",
+            "X-CSRFToken": csrf
+        },
+        body: JSON.stringify({user_input: input})
+    });
+
+    const data = await response.json();
+    document.getElementById('chat-output').innerHTML = `<p><strong>AI javobi:</strong> ${data.answer}</p>`;
+});
+</script>
