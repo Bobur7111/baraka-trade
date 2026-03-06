@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="p-10">
+
+<h1 class="text-2xl font-bold mb-6">
+Notifications
+</h1>
+
+{% for n in notifications %}
+
+<div class="bg-white p-4 rounded shadow mb-3">
+
+{{ n.message }}
+
+</div>
+
+{% empty %}
+
+<p>No notifications</p>
+
+{% endfor %}
+
+</div>
+
+{% endblock %}

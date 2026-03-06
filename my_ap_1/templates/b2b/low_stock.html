@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="bg-white p-8 rounded-xl shadow">
+
+<h1 class="text-2xl font-bold mb-6">
+📉 Kam qolgan mahsulotlar
+</h1>
+
+<table class="w-full text-left">
+
+<tr class="border-b">
+<th class="py-2">Mahsulot</th>
+<th>Stock</th>
+<th>Status</th>
+<th>Harakat</th>
+</tr>
+
+{% for product in products %}
+
+<tr class="border-b">
+
+<td class="py-3">
+{{ product.name_uz }}
+</td>
+
+<td>
+{{ product.stock }}
+</td>
+
+<td>
+
+{% if product.stock <= 3 %}
+
+<span class="text-red-600 font-bold">
+Kritik
+</span>
+
+{% elif product.stock <= 7 %}
+
+<span class="text-yellow-500">
+Kam
+</span>
+
+{% endif %}
+
+</td>
+
+<td>
+
+<form method="POST"
+action="{% url 'create_supply_request' product.id %}">
+
+{% csrf_token %}
+
+<button class="bg-green-600 text-white px-4 py-1 rounded">
+
+Buyurtma berish
+
+</button>
+
+</form>
+
+</td>
+
+</tr>
+
+{% endfor %}
+
+</table>
+
+</div>
+
+{% endblock %}

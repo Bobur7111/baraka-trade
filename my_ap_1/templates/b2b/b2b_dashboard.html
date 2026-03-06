@@ -1,0 +1,341 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+
+<div class="flex">
+
+<!-- SIDEBAR -->
+<div class="w-64 bg-black text-white min-h-screen p-6 rounded-xl">
+
+<h2 class="text-2xl font-bold mb-8">
+Baraka B2B
+</h2>
+
+<ul class="space-y-4">
+
+<li class="text-green-400">
+<a href="{% url 'b2b_dashboard' %}">
+📊 Dashboard
+</a>
+</li>
+
+<li>
+<a href="{% url 'b2b_orders' %}">
+📦 Buyurtmalar
+</a>
+</li>
+
+<li>
+<a href="{% url 'sales_analytics' %}">
+📊 Statistika
+</a>
+</li>
+
+<li>
+<a href="{% url 'low_stock' %}">
+📉 Kam qolgan mahsulotlar
+</a>
+</li>
+
+<li>
+<a href="{% url 'notifications' %}">
+🔔 Bildirishnomalar
+
+{% if notifications_count > 0 %}
+<span class="bg-red-500 text-white text-xs px-2 py-1 rounded ml-2">
+{{ notifications_count }}
+</span>
+{% endif %}
+
+</a>
+</li>
+    <li>
+<a href="{% url 'ai_assistant' %}">
+🤖 AI Assistent
+</a>
+</li>
+
+<li>
+<a href="#">
+⚙ Sozlamalar
+</a>
+</li>
+
+</ul>
+
+</div>
+
+
+<!-- MAIN CONTENT -->
+<div class="flex-1 p-10">
+
+<h1 class="text-3xl font-bold mb-8 text-white">
+Aksessuar Do‘koni Paneli
+</h1>
+
+
+<!-- STATS -->
+<div class="grid grid-cols-4 gap-6 mb-10">
+
+<div class="bg-white p-6 rounded-xl shadow">
+
+<h3 class="text-gray-500">
+Bugungi Savdo
+</h3>
+
+<p class="text-2xl font-bold text-green-600">
+{{ today_sales }} so‘m
+</p>
+
+</div>
+
+
+<div class="bg-white p-6 rounded-xl shadow">
+
+<h3 class="text-gray-500">
+Kam qolgan mahsulotlar
+</h3>
+
+<p class="text-2xl font-bold text-red-500">
+{{ low_stock_count }} ta
+</p>
+
+</div>
+
+
+<div class="bg-white p-6 rounded-xl shadow">
+
+<h3 class="text-gray-500">
+Yuborilgan so‘rovlar
+</h3>
+
+<p class="text-2xl font-bold text-yellow-500">
+{{ requests_count }} ta
+</p>
+
+</div>
+
+
+<div class="bg-white p-6 rounded-xl shadow">
+
+<h3 class="text-gray-500">
+Faol yetkazmalar
+</h3>
+
+<p class="text-2xl font-bold text-blue-500">
+{{ active_deliveries }} ta
+</p>
+
+</div>
+
+</div>
+
+
+<!-- LOW STOCK TABLE -->
+
+<div class="bg-white p-6 rounded-xl shadow mb-10">
+
+<h2 class="text-xl font-bold mb-4">
+Kam Qolgan Aksessuarlar
+</h2>
+
+
+<table class="w-full text-left">
+
+<tr class="border-b">
+
+<th class="py-2">Mahsulot</th>
+<th>Stock</th>
+<th>Status</th>
+<th>Harakat</th>
+
+</tr>
+
+
+{% for product in low_stock_products %}
+
+<tr class="border-b">
+
+<td class="py-3">
+
+{{ product.name_uz }}
+
+<div class="w-full bg-gray-200 rounded-full h-2 mt-2">
+
+<div class="bg-green-600 h-2 rounded-full"
+style="width: {{ product.stock|floatformat:0 }}%">
+
+</div>
+
+</div>
+
+</td>
+
+
+<td>
+{{ product.stock }}
+</td>
+
+
+<td>
+
+{% if product.stock <= 3 %}
+
+<span class="text-red-600 font-bold">
+Kritik
+</span>
+
+{% elif product.stock <= 7 %}
+
+<span class="text-yellow-500 font-semibold">
+Kam
+</span>
+
+{% else %}
+
+<span class="text-green-500">
+Yetarli
+</span>
+
+{% endif %}
+
+</td>
+
+
+<td>
+
+<form method="POST"
+action="{% url 'create_supply_request' product.id %}">
+
+{% csrf_token %}
+
+<button
+class="bg-green-600 hover:bg-green-700 text-white px-4 py-1 rounded">
+
+Buyurtma berish
+
+</button>
+
+</form>
+
+</td>
+
+</tr>
+
+{% empty %}
+
+<tr>
+
+<td colspan="4"
+class="text-center py-4 text-gray-500">
+
+Barcha mahsulotlar yetarli
+
+</td>
+
+</tr>
+
+{% endfor %}
+
+</table>
+
+</div>
+
+
+
+<!-- AI BUSINESS BLOCK -->
+
+<div class="bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-8 rounded-xl shadow mb-10">
+
+<h2 class="text-xl font-bold mb-4">
+🤖 AI Biznes Assistent
+</h2>
+
+<p class="mb-4">
+AI sotuvlarni tahlil qilib quyidagi mahsulotlarni
+ko‘proq buyurtma qilishni tavsiya qiladi:
+</p>
+
+<ul class="space-y-2">
+
+{% for p in ai_recommendations %}
+
+<li>
+📦 {{ p.name_uz }} (stock: {{ p.stock }})
+</li>
+
+{% endfor %}
+
+</ul>
+
+</div>
+
+
+
+<!-- AI RESTOCK PREDICTION -->
+
+<div class="bg-white p-6 rounded-xl shadow">
+
+<h2 class="text-xl font-bold mb-4">
+🤖 AI Restock Prediction
+</h2>
+
+<table class="w-full text-left">
+
+<tr class="border-b">
+
+<th>Mahsulot</th>
+<th>Kunlik sotuv</th>
+<th>Qancha kunga yetadi</th>
+<th>Tavsiya</th>
+
+</tr>
+
+{% for item in ai_predictions %}
+
+<tr class="border-b">
+
+<td>
+{{ item.product.name_uz }}
+</td>
+
+<td>
+{{ item.daily_avg }}
+</td>
+
+<td>
+{{ item.days_left }} kun
+</td>
+
+<td class="text-green-600 font-bold">
+{{ item.recommended }} dona buyurtma
+</td>
+
+</tr>
+
+{% empty %}
+
+<tr>
+
+<td colspan="4"
+class="text-center text-gray-500 py-4">
+
+AI hozircha restock tavsiya bermayapti
+
+</td>
+
+</tr>
+
+{% endfor %}
+
+</table>
+
+</div>
+
+
+</div>
+
+</div>
+
+{% endblock %}

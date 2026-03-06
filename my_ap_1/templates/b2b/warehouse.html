@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+
+{% block content %}
+
+<div class="p-10">
+
+<h1 class="text-3xl font-bold text-white mb-8">
+📦 Warehouse Management
+</h1>
+
+<div class="bg-white p-6 rounded-xl shadow mb-8">
+
+<h2 class="text-xl font-bold mb-4">Mahsulotlar</h2>
+
+<table class="w-full">
+
+<tr class="border-b">
+<th>Mahsulot</th>
+<th>Stock</th>
+<th>Action</th>
+</tr>
+
+{% for product in products %}
+
+<tr class="border-b">
+
+<td>{{ product.name_uz }}</td>
+
+<td>{{ product.stock }}</td>
+
+<td class="space-x-2">
+
+<form method="POST" action="{% url 'stock_in' product.id %}" style="display:inline">
+{% csrf_token %}
+<input type="number" name="quantity" value="1" class="border w-16">
+<button class="bg-green-600 text-white px-3 py-1 rounded">
+Kirim
+</button>
+</form>
+
+<form method="POST" action="{% url 'stock_out' product.id %}" style="display:inline">
+{% csrf_token %}
+<input type="number" name="quantity" value="1" class="border w-16">
+<button class="bg-red-600 text-white px-3 py-1 rounded">
+Chiqim
+</button>
+</form>
+
+</td>
+
+</tr>
+
+{% endfor %}
+
+</table>
+
+</div>
+
+
+<div class="bg-white p-6 rounded-xl shadow">
+
+<h2 class="text-xl font-bold mb-4">
+📜 Oxirgi Ombor Harakatlari
+</h2>
+
+<ul>
+
+{% for log in logs %}
+
+<li>
+{{ log.product.name_uz }} — {{ log.action }} — {{ log.quantity }}
+</li>
+
+{% endfor %}
+
+</ul>
+
+</div>
+
+</div>
+
+{% endblock %}

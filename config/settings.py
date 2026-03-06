@@ -4,9 +4,6 @@ Django settings for config project.
 
 from pathlib import Path
 import os
-TELEGRAM_BOT_TOKEN = "8324091353:AAE8VnxiP-t5y1lTk8s-aHlnwVgzEPHzrAY"
-TELEGRAM_CHAT_ID = "7191312648"
-import os
 from dotenv import load_dotenv
 
 load_dotenv(dotenv_path='myy.env')
@@ -45,10 +42,7 @@ ROOT_URLCONF = 'config.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [
-            os.path.join(BASE_DIR, 'templates'),
-            os.path.join(BASE_DIR, 'my_ap_1', 'templates')
-        ],
+        'DIRS': [],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -59,6 +53,7 @@ TEMPLATES = [
 
 
                 'my_ap_1.context_processors.global_context',
+                'my_ap_1.context_processors.notifications_count'
             ],
         },
     },

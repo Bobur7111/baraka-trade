@@ -2,21 +2,23 @@ import os
 import pickle
 import torch
 from PIL import Image
-
+from huggingface_hub import User
+from django.contrib.auth.models import User
+from .models import WarehouseLog, Notification
 from django.shortcuts import render, redirect, get_object_or_404
 from django.db.models import Q
 from django.http import JsonResponse
-
 from .models import Product, Category, CartItem, AdminProfile
-
+from django.db.models import Sum
+from .models import Order
 import openai
 from transformers import CLIPProcessor, CLIPModel
 from dotenv import load_dotenv
+from django.shortcuts import render, redirect, get_object_or_404
+from django.contrib.auth.decorators import login_required
+from django.utils import timezone
+from django.db.models import Sum
 
-
-# =========================
-# 🔐 ENV & AI SETUP
-# =========================
 load_dotenv("myy.env")
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
@@ -234,9 +236,6 @@ def about_view(request):
     })
 
 
-# =========================
-# 🖼 AI IMAGE SEARCH
-# =========================
 def search_ai(request):
     result = []
 
@@ -289,3 +288,447 @@ def chat_with_ai(request):
     return render(request, "chatbot.html", {
         "cart_item_count": get_cart_count(request)
     })
+
+
+
+from .models import (
+    Product,
+    CartItem,
+    B2BRequest,
+    RestockRequest,
+    Order,
+    SupplyRequest,
+    Delivery
+)
+
+
+@login_required
+def create_b2b_request(request, product_id):
+
+    product = get_object_or_404(Product, id=product_id)
+
+    B2BRequest.objects.create(
+        retailer=request.user,
+        product=product,
+        quantity=50
+    )
+
+    return redirect("b2b_dashboard")
+
+
+@login_required
+def create_supply_request(request, product_id):
+
+    product = get_object_or_404(Product, id=product_id)
+
+    req = SupplyRequest.objects.create(
+        retailer=request.user,
+        product=product,
+        quantity=10
+    )
+
+    # 🔔 notification distributor uchun
+    distributors = User.objects.filter(profile__role="distributor")
+
+    for d in distributors:
+        Notification.objects.create(
+            user=d,
+            message=f"New supply request for {product.name_uz}"
+        )
+
+    return redirect("b2b_dashboard")
+
+
+@login_required
+def distributor_dashboard(request):
+
+    if request.user.profile.role != "distributor":
+        return redirect("home")
+
+    requests = SupplyRequest.objects.all().order_by("-id")
+
+    return render(
+        request,
+        "b2b/distributor_dashboard.html",
+        {
+            "requests": requests
+        }
+    )
+def b2b_orders(request):
+
+    orders = B2BRequest.objects.filter(
+        retailer=request.user
+    ).order_by("-created_at")
+
+    return render(
+        request,
+        "b2b/orders.html",
+        {"orders": orders}
+    )
+@login_required
+def approve_request(request, request_id):
+
+    if request.user.profile.role != "distributor":
+        return redirect("home")
+
+    req = get_object_or_404(SupplyRequest, id=request_id)
+
+    req.status = "sent"
+    req.save()
+
+    # Delivery yaratamiz
+    Delivery.objects.create(
+        request=req,
+        status="active"
+    )
+
+    return redirect("distributor_dashboard")
+def low_stock(request):
+
+    products = Product.objects.filter(stock__lt=10)
+
+    return render(
+        request,
+        "b2b/low_stock.html",
+        {"products": products}
+    )
+from datetime import timedelta
+from django.db.models import Sum
+
+from datetime import timedelta
+
+@login_required
+def b2b_dashboard(request):
+
+    today = timezone.now().date()
+
+    # 🛒 Bugungi buyurtmalar
+    today_orders = Order.objects.filter(
+        retailer=request.user,
+        created_at__date=today
+    )
+
+    today_sales = today_orders.aggregate(
+        total=Sum("total_price")
+    )["total"] or 0
+
+
+    # 📉 Kam qolgan mahsulotlar
+    low_stock_products = Product.objects.filter(
+        stock__lt=10
+    ).order_by("stock")
+
+    low_stock_count = low_stock_products.count()
+
+
+    # 📦 Retailer yuborgan requestlar
+    requests_count = SupplyRequest.objects.filter(
+        retailer=request.user
+    ).count()
+
+
+    # 🚚 Aktiv yetkazmalar
+    active_deliveries = Delivery.objects.filter(
+        request__retailer=request.user,
+        status="active"
+    ).count()
+
+
+    # 🤖 AI recommendation
+    ai_recommendations = Product.objects.order_by("stock")[:3]
+
+
+    # 📊 7 kunlik sales chart
+    sales_labels = []
+    sales_data = []
+
+    for i in range(6, -1, -1):
+
+        day = today - timedelta(days=i)
+
+        total = Order.objects.filter(
+            retailer=request.user,
+            created_at__date=day
+        ).aggregate(
+            total=Sum("total_price")
+        )["total"] or 0
+
+        sales_labels.append(day.strftime("%a"))
+        sales_data.append(float(total))
+
+
+    context = {
+        "today_sales": today_sales,
+        "low_stock_products": low_stock_products,
+        "low_stock_count": low_stock_count,
+        "requests_count": requests_count,
+        "active_deliveries": active_deliveries,
+        "ai_recommendations": ai_recommendations,
+
+        "sales_labels": sales_labels,
+        "sales_data": sales_data,
+    }
+
+    return render(
+        request,
+        "b2b/b2b_dashboard.html",
+        context
+    )
+@login_required
+def sales_analytics(request):
+
+    today = timezone.now().date()
+
+    sales_labels = []
+    sales_data = []
+
+    for i in range(6, -1, -1):
+
+        day = today - timedelta(days=i)
+
+        total = Order.objects.filter(
+            retailer=request.user,
+            created_at__date=day
+        ).aggregate(
+            total=Sum("total_price")
+        )["total"] or 0
+
+        sales_labels.append(day.strftime("%a"))
+        sales_data.append(float(total))
+
+    context = {
+        "sales_labels": sales_labels,
+        "sales_data": sales_data
+    }
+
+    return render(
+        request,
+        "b2b/statistics.html",
+        context
+    )
+
+@login_required
+def stock_in(request, product_id):
+
+    product = get_object_or_404(Product, id=product_id)
+
+    quantity = int(request.POST.get("quantity", 1))
+
+    product.stock += quantity
+    product.save()
+
+    WarehouseLog.objects.create(
+        product=product,
+        quantity=quantity,
+        action="in",
+        note="Manual stock update"
+    )
+
+    return redirect("warehouse_dashboard")
+
+
+@login_required
+def stock_out(request, product_id):
+
+    product = get_object_or_404(Product, id=product_id)
+
+    quantity = int(request.POST.get("quantity", 1))
+
+    product.stock -= quantity
+    product.save()
+
+    WarehouseLog.objects.create(
+        product=product,
+        quantity=quantity,
+        action="out",
+        note="Stock reduced"
+    )
+
+    return redirect("warehouse_dashboard")
+@login_required
+def warehouse_dashboard(request):
+
+    products = Product.objects.all().order_by("stock")
+
+    logs = WarehouseLog.objects.all().order_by("-created_at")[:10]
+
+    context = {
+        "products": products,
+        "logs": logs
+    }
+
+    return render(request, "b2b/warehouse.html", context)
+def calculate_restock_predictions(user):
+
+    predictions = []
+
+    today = timezone.now().date()
+    last_week = today - timedelta(days=7)
+
+    products = Product.objects.all()
+
+    for product in products:
+
+        sales = Order.objects.filter(
+            retailer=user,
+            product=product,
+            created_at__date__gte=last_week
+        )
+
+        total_sold = sales.aggregate(
+            total=Sum("quantity")
+        )["total"] or 0
+
+        daily_avg = total_sold / 7 if total_sold else 0
+
+        if daily_avg > 0:
+
+            days_left = product.stock / daily_avg if daily_avg else 0
+
+            if days_left < 5:
+
+                recommended = int(daily_avg * 14)
+
+                predictions.append({
+                    "product": product,
+                    "daily_avg": round(daily_avg, 2),
+                    "days_left": round(days_left, 1),
+                    "recommended": recommended
+                })
+
+    return predictions
+@login_required
+def ai_assistant(request):
+
+    today = timezone.now().date()
+    last_week = today - timedelta(days=7)
+
+    # eng ko‘p sotilgan mahsulotlar
+    top_products = (
+        Order.objects.filter(
+            retailer=request.user,
+            created_at__date__gte=last_week
+        )
+        .values("product__name_uz")
+        .annotate(total=Sum("quantity"))
+        .order_by("-total")[:5]
+    )
+
+    # kam qolgan mahsulotlar
+    low_stock_products = Product.objects.filter(stock__lt=10).order_by("stock")[:5]
+
+    # AI restock prediction
+    predictions = calculate_restock_predictions(request.user)
+
+    context = {
+        "top_products": top_products,
+        "low_stock_products": low_stock_products,
+        "predictions": predictions,
+    }
+
+    return render(
+        request,
+        "b2b/ai_assistant.html",
+        context
+    )
+@login_required
+def notifications(request):
+
+    notifications = Notification.objects.filter(
+        user=request.user
+    ).order_by("-created_at")
+
+    return render(
+        request,
+        "b2b/notifications.html",
+        {"notifications": notifications}
+    )
+top_products = (
+    Order.objects
+    .values("product__name_uz")
+    .annotate(total_sold=Sum("quantity"))
+    .order_by("-total_sold")[:10]
+)
+@login_required
+def sales_analytics(request):
+
+    today = timezone.now().date()
+
+    sales_labels = []
+    sales_data = []
+
+    for i in range(6, -1, -1):
+
+        day = today - timedelta(days=i)
+
+        total = Order.objects.filter(
+            retailer=request.user,
+            created_at__date=day
+        ).aggregate(
+            total=Sum("total_price")
+        )["total"] or 0
+
+        sales_labels.append(day.strftime("%a"))
+        sales_data.append(float(total))
+
+
+    # 🔥 TOP SELLING PRODUCTS
+    top_products = (
+        Order.objects
+        .values("product__name_uz")
+        .annotate(total_sold=Sum("quantity"))
+        .order_by("-total_sold")[:10]
+    )
+
+
+    context = {
+        "sales_labels": sales_labels,
+        "sales_data": sales_data,
+        "top_products": top_products
+    }
+
+    return render(
+        request,
+        "b2b/statistics.html",
+        context
+    )
+
+from django.contrib.auth.decorators import login_required
+from django.db import transaction
+
+@login_required
+def checkout(request):
+
+    cart_items = CartItem.objects.filter(user=request.user)
+
+    if not cart_items:
+        return redirect("cart_view")
+
+    total = sum(
+        item.product.price * item.quantity
+        for item in cart_items
+    )
+
+    order = Order.objects.create(
+        retailer=request.user,   # ❗ customer emas
+        total_price=total
+    )
+
+    for item in cart_items:
+
+        OrderItem.objects.create(
+            order=order,
+            product=item.product,
+            quantity=item.quantity,
+            price=item.product.price
+        )
+
+        # stock kamayadi
+        item.product.stock -= item.quantity
+        item.product.save()
+
+    cart_items.delete()
+
+    return redirect("order_success")
+def order_success(request):
+    return render(request, "order_success.html")

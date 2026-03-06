@@ -6,18 +6,13 @@
     <title>{% block title %}Baraka Market{% endblock %}</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-
-    <!-- FontAwesome -->
     <script src="https://kit.fontawesome.com/a2d9d6c63b.js" crossorigin="anonymous"></script>
 
-    <!-- Custom CSS -->
     <link rel="stylesheet" href="{% static 'css/style.css' %}">
-    <link rel="stylesheet" href="{% static 'css/ai_styles.css' %}"> <!-- AI CSS qo‘shildi -->
+    <link rel="stylesheet" href="{% static 'css/ai_styles.css' %}">
 
     <style>
-        /* Canvas yomgir foni */
         #backgroundCanvas {
             position: fixed;
             top: 0;
@@ -28,91 +23,145 @@
             pointer-events: none;
             background: #000;
         }
+
         .content-wrapper {
             position: relative;
             z-index: 10;
+        }
+
+        @keyframes b2bGlow {
+            0%   { box-shadow: 0 0 5px #ff0000; }
+            50%  { box-shadow: 0 0 20px #ff0000; }
+            100% { box-shadow: 0 0 5px #ff0000; }
+        }
+
+        .b2b-btn {
+            animation: b2bGlow 1.8s infinite;
         }
     </style>
 
     {% block extra_head %}{% endblock %}
 </head>
+
 <body class="bg-black flex flex-col min-h-screen">
 
-    <!-- Canvas yomgir -->
-    <canvas id="backgroundCanvas"></canvas>
+<canvas id="backgroundCanvas"></canvas>
 
-    <!-- Navbar -->
-    <header class="bg-green-600 text-white shadow-md relative z-10">
-        <div class="container mx-auto flex justify-between items-center py-4 px-6">
-            <a href="/" class="text-2xl font-bold tracking-wide">🛒 Baraka Market</a>
-            <nav class="space-x-6">
-                <a href="/" class="hover:text-yellow-300">Bosh sahifa</a>
-                <a href="{% url 'about' %}" class="hover:text-yellow-300">Biz haqimizda</a>
-                <a href="{% url 'cart_view' %}" class="bg-yellow-500 px-3 py-1 rounded hover:bg-yellow-600">
-                    Savat ({{ cart_item_count }})
-                </a>
-                <a href="{% url 'search_ai' %}" class="bg-blue-500 px-3 py-1 rounded hover:bg-blue-600">
-                    AI Search
-                </a>
-                <a href="{% url 'chatbot' %}" class="bg-purple-500 px-3 py-1 rounded hover:bg-purple-600">
-                    Chatbot
-                </a>
-            </nav>
-        </div>
-    </header>
+<header class="bg-green-600 text-white shadow-md relative z-10">
+    <div class="container mx-auto flex justify-between items-center py-4 px-6">
 
-    <!-- Main content -->
-    <main class="container mx-auto flex-1 py-6 px-6 content-wrapper">
-        {% block content %}{% endblock %}
-    </main>
+        <a href="/" class="text-2xl font-bold tracking-wide">
+            🛒 Baraka Market
+        </a>
 
-    <!-- Footer -->
-    <footer class="bg-gray-800 text-white text-center py-4 mt-6 relative z-10">
-        <p>&copy; {{ year }} Baraka Market. Barcha huquqlar himoyalangan.</p>
-    </footer>
+        <nav class="flex items-center space-x-4">
 
-    {% block extra_js %}
-    <script>
-    // Canvas yomgir effekti
-    const canvas = document.getElementById('backgroundCanvas');
-    const ctx = canvas.getContext('2d');
+            <a href="/" class="hover:text-yellow-300 transition">
+                Bosh sahifa
+            </a>
+
+            <a href="{% url 'about' %}" class="hover:text-yellow-300 transition">
+                Biz haqimizda
+            </a>
+
+            <!-- 🚀 Retailer -->
+            {% if request.user.is_authenticated and request.user.profile.role == "retailer" %}
+            <a href="{% url 'b2b_dashboard' %}"
+               class="bg-red-600 px-4 py-2 rounded-lg font-semibold text-white b2b-btn hover:bg-red-700 transition">
+                🚀 B2B Savdo
+            </a>
+            {% endif %}
+
+            <!-- 🚚 Distributor -->
+            {% if request.user.is_authenticated and request.user.profile.role == "distributor" %}
+            <a href="{% url 'distributor_dashboard' %}"
+               class="bg-indigo-600 px-4 py-2 rounded-lg font-semibold text-white hover:bg-indigo-700 transition">
+                🚚 Distribyutor
+            </a>
+            {% endif %}
+
+            <a href="{% url 'cart_view' %}"
+               class="bg-yellow-500 px-3 py-1 rounded hover:bg-yellow-600 transition">
+                Savat ({{ cart_item_count }})
+            </a>
+
+            <a href="{% url 'search_ai' %}"
+               class="bg-blue-500 px-3 py-1 rounded hover:bg-blue-600 transition">
+                AI Search
+            </a>
+
+            <a href="{% url 'chatbot' %}"
+               class="bg-purple-500 px-3 py-1 rounded hover:bg-purple-600 transition">
+                Chatbot
+            </a>
+
+            <!-- 🌍 Language -->
+            <form method="get">
+                <select name="lang"
+                        onchange="this.form.submit()"
+                        class="bg-green-700 text-white px-2 py-1 rounded cursor-pointer focus:outline-none">
+                    <option value="uz" {% if current_lang == 'uz' %}selected{% endif %}>UZ</option>
+                    <option value="ru" {% if current_lang == 'ru' %}selected{% endif %}>RU</option>
+                    <option value="en" {% if current_lang == 'en' %}selected{% endif %}>EN</option>
+                </select>
+            </form>
+
+        </nav>
+    </div>
+</header>
+
+<main class="container mx-auto flex-1 py-6 px-6 content-wrapper">
+    {% block content %}{% endblock %}
+</main>
+
+<footer class="bg-gray-800 text-white text-center py-4 mt-6 relative z-10">
+    <p>&copy; {{ year }} Baraka Market. Barcha huquqlar himoyalangan.</p>
+</footer>
+
+{% block extra_js %}
+<script>
+const canvas = document.getElementById('backgroundCanvas');
+const ctx = canvas.getContext('2d');
+
+function resizeCanvas(){
     canvas.width = window.innerWidth;
     canvas.height = window.innerHeight;
+}
+resizeCanvas();
+window.addEventListener("resize", resizeCanvas);
 
-    let drops = [];
-    let numDrops = 200;
-
-    for(let i=0;i<numDrops;i++){
-        drops.push({
-            x: Math.random()*canvas.width,
-            y: Math.random()*canvas.height,
-            length: 10 + Math.random()*20,
-            speed: 4 + Math.random()*4
-        });
-    }
-
-    function draw(){
-        ctx.clearRect(0,0,canvas.width,canvas.height);
-        ctx.strokeStyle = "white";
-        ctx.lineWidth = 1;
-        drops.forEach(drop=>{
-            ctx.beginPath();
-            ctx.moveTo(drop.x, drop.y);
-            ctx.lineTo(drop.x, drop.y + drop.length);
-            ctx.stroke();
-            drop.y += drop.speed;
-            if(drop.y > canvas.height) drop.y = -drop.length;
-        });
-        requestAnimationFrame(draw);
-    }
-    draw();
-
-    window.addEventListener('resize', ()=>{
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
+let drops = [];
+for(let i=0;i<200;i++){
+    drops.push({
+        x: Math.random()*canvas.width,
+        y: Math.random()*canvas.height,
+        length: 10 + Math.random()*20,
+        speed: 4 + Math.random()*4
     });
-    </script>
-    {% endblock %}
+}
+
+function draw(){
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    ctx.strokeStyle = "white";
+    ctx.lineWidth = 1;
+
+    drops.forEach(drop=>{
+        ctx.beginPath();
+        ctx.moveTo(drop.x, drop.y);
+        ctx.lineTo(drop.x, drop.y + drop.length);
+        ctx.stroke();
+
+        drop.y += drop.speed;
+        if(drop.y > canvas.height){
+            drop.y = -drop.length;
+        }
+    });
+
+    requestAnimationFrame(draw);
+}
+draw();
+</script>
+{% endblock %}
 
 </body>
 </html>
