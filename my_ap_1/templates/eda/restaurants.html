@@ -1,10 +1,181 @@
+{% load static %}
 <!DOCTYPE html>
-<html lang="en">
+<html>
+
 <head>
-  <meta charset="UTF-8">
-  <title>$Title$</title>
+
+<meta charset="UTF-8">
+
+<link rel="stylesheet" href="{% static 'css/design.css' %}">
+
+<style>
+
+body{
+font-family:Inter,Arial;
+background:linear-gradient(180deg,#f7f9fc,#eef2f7);
+margin:40px;
+}
+
+.title{
+font-size:38px;
+font-weight:700;
+margin-bottom:20px;
+}
+
+.search-box input{
+width:100%;
+padding:16px;
+border-radius:14px;
+border:none;
+box-shadow:0 6px 20px rgba(0,0,0,0.08);
+font-size:16px;
+margin-bottom:40px;
+}
+
+.restaurant-grid{
+display:grid;
+grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
+gap:28px;
+}
+
+.restaurant-card{
+background:white;
+border-radius:18px;
+overflow:hidden;
+box-shadow:0 12px 30px rgba(0,0,0,0.08);
+transition:0.3s;
+cursor:pointer;
+}
+
+.restaurant-card:hover{
+transform:translateY(-8px);
+box-shadow:0 25px 50px rgba(0,0,0,0.15);
+}
+
+.restaurant-card img{
+width:100%;
+height:200px;
+object-fit:cover;
+}
+
+.restaurant-info{
+padding:20px;
+}
+
+.restaurant-info h3{
+margin:0;
+font-size:20px;
+}
+
+.meta{
+margin-top:6px;
+color:#666;
+font-size:14px;
+}
+
+</style>
+
 </head>
+
 <body>
-$END$
+<div style="display:flex;justify-content:space-between;margin-bottom:40px">
+
+<h1>Baraka Market</h1>
+
+<div>
+
+<button class="btn">🛒 Savatcha</button>
+<button class="btn">👤 Profil</button>
+
+</div>
+
+</div>
+
+<div class="title">🍔 Restoranlar</div>
+
+<div class="search-box">
+<input type="text" id="searchInput" placeholder="Restoran qidirish...">
+</div>
+
+<div style="display:flex;gap:15px;overflow-x:auto;margin-bottom:25px">
+
+<div class="card">🍔 Burger</div>
+<div class="card">🍕 Pizza</div>
+<div class="card">🥙 Lavash</div>
+<div class="card">🍣 Sushi</div>
+<div class="card">🥗 Salat</div>
+
+</div>
+
+<div class="restaurant-grid">
+
+{% for r in restaurants %}
+
+<a href="/eda/restaurant/{{ r.id }}/" style="text-decoration:none;color:black">
+
+<div class="restaurant-card">
+
+<img src="{{ r.image.url }}">
+
+<div class="restaurant-info">
+
+<h3>{{ r.name }}</h3>
+
+<div class="meta">
+⭐ {{ r.rating }} • 🚴 20-30 min
+</div>
+
+</div>
+
+</div>
+
+</a>
+
+{% endfor %}
+
+</div>
+
+
+<script>
+
+let input=document.getElementById("searchInput")
+
+input.addEventListener("keyup",function(){
+
+let filter=input.value.toLowerCase()
+
+let cards=document.querySelectorAll(".restaurant-card")
+
+cards.forEach(card=>{
+
+let name=card.innerText.toLowerCase()
+
+card.style.display=name.includes(filter)?"block":"none"
+
+})
+
+})
+
+function distance(lat1,lon1,lat2,lon2){
+
+const R=6371
+
+let dLat=(lat2-lat1)*Math.PI/180
+let dLon=(lon2-lon1)*Math.PI/180
+
+let a=
+Math.sin(dLat/2)*Math.sin(dLat/2)+
+Math.cos(lat1*Math.PI/180)*
+Math.cos(lat2*Math.PI/180)*
+Math.sin(dLon/2)*Math.sin(dLon/2)
+
+let c=2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))
+
+return (R*c).toFixed(2)
+
+}
+
+</script>
+
 </body>
 </html>

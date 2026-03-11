@@ -6,6 +6,7 @@
 <div class="flex">
 
 <!-- SIDEBAR -->
+
 <div class="w-64 bg-black text-white min-h-screen p-6 rounded-xl">
 
 <h2 class="text-2xl font-bold mb-8">
@@ -42,15 +43,14 @@ Baraka B2B
 <a href="{% url 'notifications' %}">
 🔔 Bildirishnomalar
 
-{% if notifications_count > 0 %}
-<span class="bg-red-500 text-white text-xs px-2 py-1 rounded ml-2">
-{{ notifications_count }}
-</span>
+{% if notifications_count > 0 %} <span class="bg-red-500 text-white text-xs px-2 py-1 rounded ml-2">
+{{ notifications_count }} </span>
 {% endif %}
 
 </a>
 </li>
-    <li>
+
+<li>
 <a href="{% url 'ai_assistant' %}">
 🤖 AI Assistent
 </a>
@@ -66,22 +66,22 @@ Baraka B2B
 
 </div>
 
-
 <!-- MAIN CONTENT -->
+
 <div class="flex-1 p-10">
 
 <h1 class="text-3xl font-bold mb-8 text-white">
 Aksessuar Do‘koni Paneli
 </h1>
 
-
 <!-- STATS -->
-<div class="grid grid-cols-4 gap-6 mb-10">
+
+<div class="grid grid-cols-5 gap-6 mb-10">
 
 <div class="bg-white p-6 rounded-xl shadow">
 
 <h3 class="text-gray-500">
-Bugungi Savdo
+Bugungi B2B Savdo
 </h3>
 
 <p class="text-2xl font-bold text-green-600">
@@ -90,6 +90,17 @@ Bugungi Savdo
 
 </div>
 
+<div class="bg-white p-6 rounded-xl shadow">
+
+<h3 class="text-gray-500">
+Bugungi B2C tushumlarim
+</h3>
+
+<p class="text-2xl font-bold text-purple-600">
+{{ b2c_today_sales }} so‘m
+</p>
+
+</div>
 
 <div class="bg-white p-6 rounded-xl shadow">
 
@@ -103,7 +114,6 @@ Kam qolgan mahsulotlar
 
 </div>
 
-
 <div class="bg-white p-6 rounded-xl shadow">
 
 <h3 class="text-gray-500">
@@ -115,7 +125,6 @@ Yuborilgan so‘rovlar
 </p>
 
 </div>
-
 
 <div class="bg-white p-6 rounded-xl shadow">
 
@@ -131,6 +140,75 @@ Faol yetkazmalar
 
 </div>
 
+<!-- SALES ANALYTICS -->
+
+<div class="grid grid-cols-2 gap-6 mb-10">
+
+<div class="bg-white p-6 rounded-xl shadow">
+
+<h2 class="text-xl font-bold mb-4">
+📊 Oxirgi 7 kun B2C savdo statistikasi
+</h2>
+
+<ul class="space-y-2">
+
+{% for sale in daily_sales %}
+
+<li class="flex justify-between border-b pb-2">
+
+<span>{{ sale.day }}</span>
+
+<span class="font-bold text-green-600">
+{{ sale.total }} so‘m
+</span>
+
+</li>
+
+{% empty %}
+
+<li class="text-gray-500">
+Savdo ma'lumotlari yo‘q
+</li>
+
+{% endfor %}
+
+</ul>
+
+</div>
+
+<div class="bg-white p-6 rounded-xl shadow">
+
+<h2 class="text-xl font-bold mb-4">
+🏆 Eng ko‘p sotilgan mahsulotlar
+</h2>
+
+<ul class="space-y-2">
+
+{% for product in top_products %}
+
+<li class="flex justify-between border-b pb-2">
+
+<span>{{ product.product__name }}</span>
+
+<span class="font-bold text-indigo-600">
+{{ product.total_sold }} ta
+</span>
+
+</li>
+
+{% empty %}
+
+<li class="text-gray-500">
+Hozircha sotuv yo‘q
+</li>
+
+{% endfor %}
+
+</ul>
+
+</div>
+
+</div>
 
 <!-- LOW STOCK TABLE -->
 
@@ -139,7 +217,6 @@ Faol yetkazmalar
 <h2 class="text-xl font-bold mb-4">
 Kam Qolgan Aksessuarlar
 </h2>
-
 
 <table class="w-full text-left">
 
@@ -151,7 +228,6 @@ Kam Qolgan Aksessuarlar
 <th>Harakat</th>
 
 </tr>
-
 
 {% for product in low_stock_products %}
 
@@ -172,11 +248,9 @@ style="width: {{ product.stock|floatformat:0 }}%">
 
 </td>
 
-
 <td>
 {{ product.stock }}
 </td>
-
 
 <td>
 
@@ -201,7 +275,6 @@ Yetarli
 {% endif %}
 
 </td>
-
 
 <td>
 
@@ -242,8 +315,6 @@ Barcha mahsulotlar yetarli
 
 </div>
 
-
-
 <!-- AI BUSINESS BLOCK -->
 
 <div class="bg-gradient-to-r from-purple-600 to-indigo-600 text-white p-8 rounded-xl shadow mb-10">
@@ -270,8 +341,6 @@ ko‘proq buyurtma qilishni tavsiya qiladi:
 </ul>
 
 </div>
-
-
 
 <!-- AI RESTOCK PREDICTION -->
 
@@ -332,7 +401,6 @@ AI hozircha restock tavsiya bermayapti
 </table>
 
 </div>
-
 
 </div>
 

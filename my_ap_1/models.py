@@ -2,6 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 from django.db.models.signals import post_save
 from django.dispatch import receiver
+import random
 
 
 # =========================
@@ -199,27 +200,44 @@ class RestockRequest(models.Model):
 
 class Order(models.Model):
 
-    retailer = models.ForeignKey(User, on_delete=models.CASCADE)
-
-    product = models.ForeignKey(
-        "Product",
-        on_delete=models.CASCADE
+    ORDER_TYPE = (
+        ("b2b", "B2B"),
+        ("b2c", "B2C"),
     )
 
-    quantity = models.IntegerField()
+    STATUS = (
+        ("pending", "Pending"),
+        ("paid", "Paid"),
+    )
+
+    retailer = models.ForeignKey(User, on_delete=models.CASCADE)
 
     total_price = models.DecimalField(max_digits=10, decimal_places=2)
+
+    order_type = models.CharField(
+        max_length=10,
+        choices=ORDER_TYPE,
+        default="b2c"
+    )
+
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS,
+        default="pending"
+    )
 
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self):
-        return f"{self.retailer} - {self.product}"
+        return f"Order {self.id} - {self.retailer}"
+
 
 class OrderItem(models.Model):
 
     order = models.ForeignKey(
         Order,
-        on_delete=models.CASCADE
+        on_delete=models.CASCADE,
+        related_name="items"
     )
 
     product = models.ForeignKey(
@@ -229,12 +247,10 @@ class OrderItem(models.Model):
 
     quantity = models.IntegerField()
 
-    price = models.IntegerField()
+    price = models.DecimalField(max_digits=10, decimal_places=2)
 
-
-# =========================
-# SUPPLY REQUEST
-# =========================
+    def __str__(self):
+        return f"{self.product.name_uz} x {self.quantity}"
 
 class SupplyRequest(models.Model):
 
@@ -309,3 +325,105 @@ class Notification(models.Model):
 
     def __str__(self):
         return self.message
+
+class ProductVoice(models.Model):
+    CATEGORY_CHOICES = (
+        ("phone", "Phone"),
+        ("accessory", "Accessory"),
+    )
+
+    name = models.CharField(max_length=255)
+    price = models.IntegerField()
+    ram = models.IntegerField(null=True, blank=True)
+    brand = models.CharField(max_length=100)
+    category = models.CharField(max_length=50, choices=CATEGORY_CHOICES)
+
+    def __str__(self):
+        return self.name
+
+class Restaurant(models.Model):
+    name = models.CharField(max_length=200)
+    image = models.ImageField(upload_to="restaurants/")
+    description = models.TextField(blank=True)
+
+    latitude = models.FloatField()
+    longitude = models.FloatField()
+
+    rating = models.FloatField(default=5)
+
+    def __str__(self):
+        return self.name
+
+
+class Food(models.Model):
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
+    name = models.CharField(max_length=200)
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    image = models.ImageField(upload_to="foods/")
+    description = models.TextField(blank=True)
+
+    def __str__(self):
+        return self.name
+
+
+class Courier(models.Model):
+    name = models.CharField(max_length=200)
+    phone = models.CharField(max_length=20)
+
+    latitude = models.FloatField(null=True, blank=True)
+    longitude = models.FloatField(null=True, blank=True)
+
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.name
+
+
+def generate_order_code():
+    return str(random.randint(100000, 999999))
+
+
+class FoodOrder(models.Model):
+
+    code = models.CharField(max_length=6, default=generate_order_code)
+
+    restaurant = models.ForeignKey(Restaurant, on_delete=models.CASCADE)
+    courier = models.ForeignKey(Courier, null=True, blank=True, on_delete=models.SET_NULL)
+
+    customer_name = models.CharField(max_length=200)
+    customer_phone = models.CharField(max_length=20)
+
+    latitude = models.FloatField()
+    longitude = models.FloatField()
+
+    status = models.CharField(max_length=50, default="new")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"FoodOrder {self.code}"
+
+
+class FoodOrderItem(models.Model):
+
+    order = models.ForeignKey(FoodOrder, on_delete=models.CASCADE)
+
+    food = models.ForeignKey(Food, on_delete=models.CASCADE)
+
+    quantity = models.IntegerField(default=1)
+
+    def __str__(self):
+        return self.food.name
+
+class PaymentOTP(models.Model):
+
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+
+    phone = models.CharField(max_length=20)
+
+    code = models.CharField(max_length=6)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.phone} - {self.code}"

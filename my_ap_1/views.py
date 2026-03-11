@@ -1,35 +1,96 @@
-import os
-import pickle
-import torch
-from PIL import Image
-from huggingface_hub import User
-from django.contrib.auth.models import User
-from .models import WarehouseLog, Notification
-from django.shortcuts import render, redirect, get_object_or_404
-from django.db.models import Q
-from django.http import JsonResponse
-from .models import Product, Category, CartItem, AdminProfile
-from django.db.models import Sum
-from .models import Order
-import openai
-from transformers import CLIPProcessor, CLIPModel
-from dotenv import load_dotenv
-from django.shortcuts import render, redirect, get_object_or_404
 from django.contrib.auth.decorators import login_required
+from django.db.models import Q
+from django.contrib.auth.models import User
+from .models import WarehouseLog, Notification, OrderItem, PaymentOTP
+from .models import  Category, AdminProfile, ProductVoice
+from PIL import Image
+from .utils import parse_voice_command
+import torch
+import re
+from .models import Food
+import random
+from django.core.cache import cache
+from transformers import CLIPProcessor, CLIPModel
+from datetime import timedelta
+from .models import Food, FoodOrder, FoodOrderItem
+from django.shortcuts import render, redirect, get_object_or_404
 from django.utils import timezone
-from django.db.models import Sum
-
-load_dotenv("myy.env")
-openai.api_key = os.getenv("OPENAI_API_KEY")
+from django.db.models import Sum, Count
+from django.db.models.functions import TruncDate
+IMAGE_FOLDER = "media/products"
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
+
 model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(device)
 processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
 
-with open("product_vectors.pkl", "rb") as f:
-    product_vectors = pickle.load(f)
+
+CATEGORIES = {
+    "Ko'zoynaklar": ["glasses", "sunglasses", "eyeglasses"],
+    "Mobile Telefonlar": ["smartphone", "mobile phone", "iphone"],
+    "Soatlar": ["watch", "clock"],
+    "Naushnik va aerpotslar": ["earbuds", "airpods", "headphones"],
+    "Kalonkalar": ["speaker", "bluetooth speaker"]
+}
+
+def detect_category(image):
+
+    texts = []
+    mapping = []
+
+    for cat, words in CATEGORIES.items():
+        for w in words:
+            texts.append(f"a photo of {w}")
+            mapping.append(cat)
+
+    inputs = processor(
+        text=texts,
+        images=image,
+        return_tensors="pt",
+        padding=True
+    ).to(device)
+
+    with torch.no_grad():
+        outputs = model(**inputs)
+
+    probs = outputs.logits_per_image.softmax(dim=1)
+
+    best = probs.argmax().item()
+
+    return mapping[best]
 
 
+def search_ai(request):
+
+    result = []
+    detected_category = None
+
+    if request.method == "POST":
+
+        image_file = request.FILES.get("image")
+
+        if image_file:
+
+            image = Image.open(image_file).convert("RGB")
+
+            category = detect_category(image)
+
+            print("Detected:", category)
+
+            detected_category = category
+
+            result = Product.objects.filter(
+                category__name_uz__icontains=category
+            )
+
+    return render(
+        request,
+        "search_ai.html",
+        {
+            "result": result,
+            "detected_category": detected_category
+        }
+    )
 # =========================
 # 🛒 CART HELPERS
 # =========================
@@ -236,61 +297,37 @@ def about_view(request):
     })
 
 
-def search_ai(request):
-    result = []
+#
+# # =========================
+# # 💬 CHATBOT
+# # =========================
+# def chat_with_ai(request):
+#     if request.method == "POST":
+#         import json
+#         data = json.loads(request.body)
+#         user_input = data.get("user_input", "")
+#
+#         if not user_input:
+#             return JsonResponse({"answer": "Savol bo‘sh!"})
+#
+#         response = openai.ChatCompletion.create(
+#             model="gpt-4o-mini",
+#             messages=[{"role": "user", "content": user_input}],
+#             temperature=0.7
+#         )
+#
+#         return JsonResponse({
+#             "answer": response.choices[0].message["content"]
+#         })
+#
+#     return render(request, "chatbot.html", {
+#         "cart_item_count": get_cart_count(request)
+#     })
+#
+#
 
-    if request.method == "POST" and request.FILES.get("image"):
-        try:
-            image = Image.open(request.FILES["image"]).convert("RGB")
-            inputs = processor(images=image, return_tensors="pt").to(device)
-
-            with torch.no_grad():
-                query_vector = model.get_image_features(**inputs)
-                query_vector = query_vector / query_vector.norm()
-                query_vector = query_vector.cpu().numpy()
-
-            sims = [(fn, (query_vector @ vec.T).item())
-                    for fn, vec in product_vectors.items()]
-            sims.sort(key=lambda x: x[1], reverse=True)
-            result = sims[:6]
-
-        except Exception as e:
-            print("AI search error:", e)
-
-    return render(request, "search_ai.html", {
-        "result": result,
-        "cart_item_count": get_cart_count(request)
-    })
-
-
-# =========================
-# 💬 CHATBOT
-# =========================
-def chat_with_ai(request):
-    if request.method == "POST":
-        import json
-        data = json.loads(request.body)
-        user_input = data.get("user_input", "")
-
-        if not user_input:
-            return JsonResponse({"answer": "Savol bo‘sh!"})
-
-        response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=[{"role": "user", "content": user_input}],
-            temperature=0.7
-        )
-
-        return JsonResponse({
-            "answer": response.choices[0].message["content"]
-        })
-
-    return render(request, "chatbot.html", {
-        "cart_item_count": get_cart_count(request)
-    })
-
-
-
+from django.shortcuts import render
+from django.http import JsonResponse
 from .models import (
     Product,
     CartItem,
@@ -301,7 +338,80 @@ from .models import (
     Delivery
 )
 
+import json
 
+
+from django.shortcuts import render
+from django.http import JsonResponse
+from .models import Product
+import json
+
+
+from django.shortcuts import render
+from django.http import JsonResponse
+from .models import Product
+import json
+
+
+def chatbot(request):
+
+    if request.method == "POST":
+
+        data = json.loads(request.body)
+        message = data.get("message", "").lower()
+
+        price = extract_price(message)
+
+        # TELEFON
+        if "telefon" in message:
+
+            products = Product.objects.filter(
+                category__name_uz__icontains="telefon"
+            )
+
+            # agar narx so'ralgan bo'lsa
+            if price:
+
+                filtered = products.filter(price__lte=price)
+
+                # agar topilmasa
+                if not filtered.exists():
+
+                    cheapest = products.order_by("price").first()
+
+                    return JsonResponse({
+                        "type": "text",
+                        "reply": f"Kechirasiz, {price} UZS dan arzon telefon yo‘q. Eng arzoni {cheapest.price} UZS."
+                    })
+
+                products = filtered
+
+            products = products.order_by("price")[:5]
+
+            result = []
+
+            for p in products:
+
+                image_url = p.image.url if p.image else ""
+
+                result.append({
+                    "id": p.id,
+                    "name": str(p),
+                    "price": p.price,
+                    "image": image_url
+                })
+
+            return JsonResponse({
+                "type": "products",
+                "products": result
+            })
+
+        return JsonResponse({
+            "type": "text",
+            "reply": "Qanday mahsulot kerak? Masalan: telefon, soat yoki naushnik."
+        })
+
+    return render(request, "chatbot.html")
 @login_required
 def create_b2b_request(request, product_id):
 
@@ -558,6 +668,7 @@ def warehouse_dashboard(request):
     }
 
     return render(request, "b2b/warehouse.html", context)
+
 def calculate_restock_predictions(user):
 
     predictions = []
@@ -569,10 +680,10 @@ def calculate_restock_predictions(user):
 
     for product in products:
 
-        sales = Order.objects.filter(
-            retailer=user,
+        sales = OrderItem.objects.filter(
+            order__retailer=user,
             product=product,
-            created_at__date__gte=last_week
+            order__created_at__date__gte=last_week
         )
 
         total_sold = sales.aggregate(
@@ -605,17 +716,18 @@ def ai_assistant(request):
 
     # eng ko‘p sotilgan mahsulotlar
     top_products = (
-        Order.objects.filter(
-            retailer=request.user,
-            created_at__date__gte=last_week
+        OrderItem.objects.filter(
+            order__retailer=request.user
         )
         .values("product__name_uz")
-        .annotate(total=Sum("quantity"))
-        .order_by("-total")[:5]
+        .annotate(total_sold=Sum("quantity"))
+        .order_by("-total_sold")[:10]
     )
 
     # kam qolgan mahsulotlar
-    low_stock_products = Product.objects.filter(stock__lt=10).order_by("stock")[:5]
+    low_stock_products = Product.objects.filter(
+        stock__lt=10
+    ).order_by("stock")[:5]
 
     # AI restock prediction
     predictions = calculate_restock_predictions(request.user)
@@ -643,12 +755,7 @@ def notifications(request):
         "b2b/notifications.html",
         {"notifications": notifications}
     )
-top_products = (
-    Order.objects
-    .values("product__name_uz")
-    .annotate(total_sold=Sum("quantity"))
-    .order_by("-total_sold")[:10]
-)
+
 @login_required
 def sales_analytics(request):
 
@@ -672,9 +779,9 @@ def sales_analytics(request):
         sales_data.append(float(total))
 
 
-    # 🔥 TOP SELLING PRODUCTS
+    # TOP SELLING PRODUCTS
     top_products = (
-        Order.objects
+        OrderItem.objects
         .values("product__name_uz")
         .annotate(total_sold=Sum("quantity"))
         .order_by("-total_sold")[:10]
@@ -692,10 +799,6 @@ def sales_analytics(request):
         "b2b/statistics.html",
         context
     )
-
-from django.contrib.auth.decorators import login_required
-from django.db import transaction
-
 @login_required
 def checkout(request):
 
@@ -704,17 +807,19 @@ def checkout(request):
     if not cart_items:
         return redirect("cart_view")
 
-    total = sum(
-        item.product.price * item.quantity
-        for item in cart_items
-    )
+    total = 0
 
+    # ORDER yaratamiz (payment hali qilinmagan)
     order = Order.objects.create(
-        retailer=request.user,   # ❗ customer emas
-        total_price=total
+        retailer=request.user,
+        total_price=0,
+        order_type="b2c",
+        status="pending"
     )
 
     for item in cart_items:
+
+        item_total = item.product.price * item.quantity
 
         OrderItem.objects.create(
             order=order,
@@ -723,12 +828,349 @@ def checkout(request):
             price=item.product.price
         )
 
-        # stock kamayadi
-        item.product.stock -= item.quantity
-        item.product.save()
+        total += item_total
 
-    cart_items.delete()
+    order.total_price = total
+    order.save()
 
-    return redirect("order_success")
+    # payment sahifa uchun order id sessionga saqlaymiz
+    request.session["payment_order_id"] = order.id
+
+    return redirect("payment_page")
+
 def order_success(request):
     return render(request, "order_success.html")
+def voice_search(request):
+
+    body = json.loads(request.body)
+    text = body.get("text")
+
+    filters = parse_voice_command(text)
+
+    products = ProductVoice.objects.filter(**filters)[:10]
+
+    data = []
+
+    for p in products:
+        data.append({
+            "name": p.name,
+            "price": p.price,
+            "ram": p.ram,
+        })
+
+    return JsonResponse({"products": data})
+
+def voice_page(request):
+    return render(request, "voice_search.html")
+def home(request):
+
+    q = request.GET.get("q")
+
+    products = Product.objects.all()
+
+    if q:
+
+        filters = parse_voice_command(q)
+
+        # CATEGORY FILTER
+        if "category" in filters:
+            products = products.filter(
+                category__name_uz=filters["category"]
+            )
+
+        # PRICE FILTER
+        if "price__lt" in filters:
+            products = products.filter(
+                price__lt=filters["price__lt"]
+            )
+
+        # RAM FILTER
+        if "ram" in filters:
+            products = products.filter(
+                ram=filters["ram"]
+            )
+
+    context = {
+        "products": products
+    }
+
+    return render(request, "home.html", context)
+
+from django.contrib.auth.decorators import login_required
+
+from django.http import JsonResponse
+from django.views.decorators.csrf import csrf_exempt
+from .models import Product, CartItem
+
+
+@csrf_exempt
+def add_to_cart_api(request, product_id):
+
+    if request.method == "POST":
+
+        try:
+
+            product = Product.objects.get(id=product_id)
+
+            CartItem.objects.create(
+                product=product,
+                quantity=1
+            )
+
+            return JsonResponse({"success": True})
+
+        except Exception as e:
+
+            return JsonResponse({"success": False, "error": str(e)})
+
+    return JsonResponse({"success": False})
+
+
+def extract_price(text):
+
+    text = text.lower()
+
+    # 2 million
+    million_match = re.search(r'(\d+)\s*(million|mln)', text)
+    if million_match:
+        return int(million_match.group(1)) * 1000000
+
+    # 2000000
+    number_match = re.search(r'\d{5,}', text)
+    if number_match:
+        return int(number_match.group())
+
+    return None
+from django.shortcuts import render
+from .models import Restaurant
+
+
+def restaurant_list(request):
+
+    restaurants = Restaurant.objects.all()
+
+    context = {
+        "restaurants": restaurants
+    }
+
+    return render(request, "eda/restaurants.html", context)
+
+def restaurant_detail(request, pk):
+
+    restaurant = get_object_or_404(Restaurant, id=pk)
+
+    foods = Food.objects.filter(restaurant=restaurant)
+
+    context = {
+        "restaurant": restaurant,
+        "foods": foods
+    }
+
+    return render(request, "eda/restaurant_detail.html", context)
+
+
+def create_food_order(request, food_id):
+
+    food = Food.objects.get(id=food_id)
+
+    order = FoodOrder.objects.create(
+        restaurant=food.restaurant,
+        customer_name="Test User",
+        customer_phone="998901234567",
+        latitude=41.3111,
+        longitude=69.2797
+    )
+
+    FoodOrderItem.objects.create(
+        order=order,
+        food=food,
+        quantity=1
+    )
+
+    return redirect("/eda/restaurants/")
+
+def courier_orders(request):
+    orders = FoodOrder.objects.filter(status="new")
+
+    context = {
+        "orders": orders
+    }
+
+    return render(request, "eda/courier_orders.html", context)
+def accept_order(request, order_id):
+    order = get_object_or_404(FoodOrder, id=order_id)
+
+    order.status = "accepted"
+    order.save()
+
+    return redirect("/eda/courier/orders/")
+def courier_order_detail(request, order_id):
+
+    order = FoodOrder.objects.get(id=order_id)
+
+    context = {
+        "order": order
+    }
+
+    return render(request, "eda/courier_order_detail.html", context)
+
+
+def b2b_sales_dashboard(request):
+
+    today = timezone.now().date()
+
+    b2c_today_sales = (
+        OrderItem.objects.filter(
+            product__seller=request.user,
+            order__status="paid",
+            order__created_at__date=today
+        ).aggregate(total=Sum("price"))
+    )
+
+    daily_sales = (
+        OrderItem.objects.filter(
+            product__seller=request.user,
+            order__status="paid"
+        )
+        .annotate(day=TruncDate("order__created_at"))
+        .values("day")
+        .annotate(total=Sum("price"))
+        .order_by("-day")[:7]
+    )
+
+    top_products = (
+        OrderItem.objects.filter(
+            product__seller=request.user,
+            order__status="paid"
+        )
+        .values("product__name")
+        .annotate(total_sold=Count("id"))
+        .order_by("-total_sold")[:5]
+    )
+
+    context = {
+        "b2c_today_sales": b2c_today_sales["total"] or 0,
+        "daily_sales": daily_sales,
+        "top_products": top_products,
+    }
+
+    return render(request, "b2b/b2b_dashboard.html", context)
+@login_required
+def confirm_payment(request):
+
+    order_id = request.session.get("payment_order_id")
+
+    if not order_id:
+        return redirect("home")
+
+    order = Order.objects.get(id=order_id)
+
+    items = OrderItem.objects.filter(order=order)
+
+    for item in items:
+
+        product = item.product
+        product.stock -= item.quantity
+        product.save()
+
+    order.status = "paid"
+    order.save()
+
+    CartItem.objects.filter(user=request.user).delete()
+
+    return redirect("order_success")
+@login_required
+def payment_page(request):
+
+    order_id = request.session.get("payment_order_id")
+
+    if not order_id:
+        return redirect("home")
+
+    order = Order.objects.get(id=order_id)
+
+    return render(
+        request,
+        "payment.html",
+        {
+            "order": order
+        }
+    )
+def send_payment_code(request):
+
+    if request.method == "POST":
+
+        data = json.loads(request.body)
+
+        phone = data.get("phone")
+
+        if not phone:
+            return JsonResponse({"success": False, "error": "Telefon kiritilmadi"})
+
+        code = str(random.randint(100000, 999999))
+
+        PaymentOTP.objects.create(
+            user=request.user,
+            phone=phone,
+            code=code
+        )
+
+        print("SMS CODE:", code)
+
+        return JsonResponse({"success": True})
+@login_required
+def verify_payment(request):
+
+    code = request.POST.get("code")
+
+    otp = PaymentOTP.objects.filter(
+        user=request.user,
+        code=code
+    ).last()
+
+    if not otp:
+        return redirect("payment_page")
+
+    order_id = request.session.get("payment_order_id")
+
+    if not order_id:
+        return redirect("home")
+
+    order = Order.objects.get(id=order_id)
+
+    items = OrderItem.objects.filter(order=order)
+
+    for item in items:
+
+        product = item.product
+        product.stock -= item.quantity
+        product.save()
+
+    order.status = "paid"
+    order.save()
+
+    CartItem.objects.filter(user=request.user).delete()
+
+    # sessionni tozalaymiz
+    del request.session["payment_order_id"]
+
+    return redirect("order_success")
+@login_required
+def buy_now(request, product_id):
+
+    product = get_object_or_404(Product, id=product_id)
+
+    # agar cartda shu product bo'lsa quantity oshiramiz
+    item, created = CartItem.objects.get_or_create(
+        user=request.user,
+        product=product
+    )
+
+    if not created:
+        item.quantity += 1
+        item.save()
+
+    return redirect("checkout")
+
+
+foods = Food.objects.all()[:10]

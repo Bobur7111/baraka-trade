@@ -1,46 +1,67 @@
 {% load static %}
+
 <!DOCTYPE html>
+
 <html lang="uz">
 <head>
-    <meta charset="UTF-8">
-    <title>{% block title %}Baraka Market{% endblock %}</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta charset="UTF-8">
+<title>{% block title %}Baraka Market{% endblock %}</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://kit.fontawesome.com/a2d9d6c63b.js" crossorigin="anonymous"></script>
+<script src="https://cdn.tailwindcss.com"></script>
 
-    <link rel="stylesheet" href="{% static 'css/style.css' %}">
-    <link rel="stylesheet" href="{% static 'css/ai_styles.css' %}">
+<script src="https://kit.fontawesome.com/a2d9d6c63b.js" crossorigin="anonymous"></script>
 
-    <style>
-        #backgroundCanvas {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            z-index: 0;
-            pointer-events: none;
-            background: #000;
-        }
+<link rel="stylesheet" href="{% static 'css/style.css' %}">
+<link rel="stylesheet" href="{% static 'css/ai_styles.css' %}">
 
-        .content-wrapper {
-            position: relative;
-            z-index: 10;
-        }
+<style>
 
-        @keyframes b2bGlow {
-            0%   { box-shadow: 0 0 5px #ff0000; }
-            50%  { box-shadow: 0 0 20px #ff0000; }
-            100% { box-shadow: 0 0 5px #ff0000; }
-        }
+#backgroundCanvas{
+position:fixed;
+top:0;
+left:0;
+width:100%;
+height:100%;
+z-index:0;
+pointer-events:none;
+background:#000;
+}
 
-        .b2b-btn {
-            animation: b2bGlow 1.8s infinite;
-        }
-    </style>
+.content-wrapper{
+position:relative;
+z-index:10;
+}
 
-    {% block extra_head %}{% endblock %}
+/* B2B glow */
+
+@keyframes b2bGlow{
+0%{box-shadow:0 0 5px #ff0000}
+50%{box-shadow:0 0 20px #ff0000}
+100%{box-shadow:0 0 5px #ff0000}
+}
+
+.b2b-btn{
+animation:b2bGlow 1.8s infinite;
+}
+
+/* EDA glow */
+
+@keyframes edaGlow{
+0%{box-shadow:0 0 5px #ff512f}
+50%{box-shadow:0 0 18px #ff512f}
+100%{box-shadow:0 0 5px #ff512f}
+}
+
+.eda-btn{
+background:linear-gradient(45deg,#ff512f,#dd2476);
+animation:edaGlow 2s infinite;
+}
+
+</style>
+
+{% block extra_head %}{% endblock %}
+
 </head>
 
 <body class="bg-black flex flex-col min-h-screen">
@@ -48,119 +69,132 @@
 <canvas id="backgroundCanvas"></canvas>
 
 <header class="bg-green-600 text-white shadow-md relative z-10">
-    <div class="container mx-auto flex justify-between items-center py-4 px-6">
 
-        <a href="/" class="text-2xl font-bold tracking-wide">
-            🛒 Baraka Market
-        </a>
+<div class="container mx-auto flex justify-between items-center py-4 px-6">
 
-        <nav class="flex items-center space-x-4">
+<a href="/" class="text-2xl font-bold tracking-wide">
+🛒 Baraka Market
+</a>
 
-            <a href="/" class="hover:text-yellow-300 transition">
-                Bosh sahifa
-            </a>
+<nav class="flex items-center space-x-4">
 
-            <a href="{% url 'about' %}" class="hover:text-yellow-300 transition">
-                Biz haqimizda
-            </a>
+<a href="/" class="hover:text-yellow-300 transition">
+Bosh sahifa
+</a>
 
-            <!-- 🚀 Retailer -->
-            {% if request.user.is_authenticated and request.user.profile.role == "retailer" %}
-            <a href="{% url 'b2b_dashboard' %}"
-               class="bg-red-600 px-4 py-2 rounded-lg font-semibold text-white b2b-btn hover:bg-red-700 transition">
-                🚀 B2B Savdo
-            </a>
-            {% endif %}
+<a href="{% url 'about' %}" class="hover:text-yellow-300 transition">
+Biz haqimizda
+</a>
 
-            <!-- 🚚 Distributor -->
-            {% if request.user.is_authenticated and request.user.profile.role == "distributor" %}
-            <a href="{% url 'distributor_dashboard' %}"
-               class="bg-indigo-600 px-4 py-2 rounded-lg font-semibold text-white hover:bg-indigo-700 transition">
-                🚚 Distribyutor
-            </a>
-            {% endif %}
+{% if request.user.is_authenticated and request.user.profile.role == "retailer" %} <a href="{% url 'b2b_dashboard' %}"
+class="bg-red-600 px-4 py-2 rounded-lg font-semibold text-white b2b-btn hover:bg-red-700 transition">
+🚀 B2B Savdo </a>
+{% endif %}
 
-            <a href="{% url 'cart_view' %}"
-               class="bg-yellow-500 px-3 py-1 rounded hover:bg-yellow-600 transition">
-                Savat ({{ cart_item_count }})
-            </a>
+{% if request.user.is_authenticated and request.user.profile.role == "distributor" %} <a href="{% url 'distributor_dashboard' %}"
+class="bg-indigo-600 px-4 py-2 rounded-lg font-semibold text-white hover:bg-indigo-700 transition">
+🚚 Distribyutor </a>
+{% endif %}
 
-            <a href="{% url 'search_ai' %}"
-               class="bg-blue-500 px-3 py-1 rounded hover:bg-blue-600 transition">
-                AI Search
-            </a>
+<a href="{% url 'cart_view' %}"
+class="bg-yellow-500 px-3 py-1 rounded hover:bg-yellow-600 transition">
+Savat ({{ cart_item_count }}) </a>
 
-            <a href="{% url 'chatbot' %}"
-               class="bg-purple-500 px-3 py-1 rounded hover:bg-purple-600 transition">
-                Chatbot
-            </a>
+<a href="{% url 'search_ai' %}"
+class="bg-blue-500 px-3 py-1 rounded hover:bg-blue-600 transition">
+AI Search </a>
 
-            <!-- 🌍 Language -->
-            <form method="get">
-                <select name="lang"
-                        onchange="this.form.submit()"
-                        class="bg-green-700 text-white px-2 py-1 rounded cursor-pointer focus:outline-none">
-                    <option value="uz" {% if current_lang == 'uz' %}selected{% endif %}>UZ</option>
-                    <option value="ru" {% if current_lang == 'ru' %}selected{% endif %}>RU</option>
-                    <option value="en" {% if current_lang == 'en' %}selected{% endif %}>EN</option>
-                </select>
-            </form>
+<a href="{% url 'chatbot' %}"
+class="bg-purple-500 px-3 py-1 rounded hover:bg-purple-600 transition">
+Chatbot </a>
 
-        </nav>
-    </div>
+<!-- EDA BUTTON -->
+
+<a href="/eda/restaurants/"
+class="eda-btn px-3 py-1 rounded text-white font-semibold hover:opacity-90 transition">
+🍔 EDA </a>
+
+<form method="get">
+<select name="lang"
+onchange="this.form.submit()"
+class="bg-green-700 text-white px-2 py-1 rounded cursor-pointer focus:outline-none">
+
+<option value="uz" {% if current_lang == 'uz' %}selected{% endif %}>UZ</option>
+<option value="ru" {% if current_lang == 'ru' %}selected{% endif %}>RU</option>
+<option value="en" {% if current_lang == 'en' %}selected{% endif %}>EN</option>
+
+</select>
+</form>
+
+</nav>
+</div>
+
 </header>
 
 <main class="container mx-auto flex-1 py-6 px-6 content-wrapper">
-    {% block content %}{% endblock %}
+{% block content %}{% endblock %}
 </main>
 
 <footer class="bg-gray-800 text-white text-center py-4 mt-6 relative z-10">
-    <p>&copy; {{ year }} Baraka Market. Barcha huquqlar himoyalangan.</p>
+<p>&copy; {{ year }} Baraka Market. Barcha huquqlar himoyalangan.</p>
 </footer>
 
+<script src="{% static 'js/voice.js' %}"></script>
+
 {% block extra_js %}
+
+<script src="{% static 'js/voice.js' %}"></script>
+
 <script>
-const canvas = document.getElementById('backgroundCanvas');
-const ctx = canvas.getContext('2d');
+
+const canvas=document.getElementById('backgroundCanvas');
+const ctx=canvas.getContext('2d');
 
 function resizeCanvas(){
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+canvas.width=window.innerWidth;
+canvas.height=window.innerHeight;
 }
 resizeCanvas();
-window.addEventListener("resize", resizeCanvas);
+window.addEventListener("resize",resizeCanvas);
 
-let drops = [];
+let drops=[];
 for(let i=0;i<200;i++){
-    drops.push({
-        x: Math.random()*canvas.width,
-        y: Math.random()*canvas.height,
-        length: 10 + Math.random()*20,
-        speed: 4 + Math.random()*4
-    });
+drops.push({
+x:Math.random()*canvas.width,
+y:Math.random()*canvas.height,
+length:10+Math.random()*20,
+speed:4+Math.random()*4
+});
 }
 
 function draw(){
-    ctx.clearRect(0,0,canvas.width,canvas.height);
-    ctx.strokeStyle = "white";
-    ctx.lineWidth = 1;
 
-    drops.forEach(drop=>{
-        ctx.beginPath();
-        ctx.moveTo(drop.x, drop.y);
-        ctx.lineTo(drop.x, drop.y + drop.length);
-        ctx.stroke();
+ctx.clearRect(0,0,canvas.width,canvas.height);
+ctx.strokeStyle="white";
+ctx.lineWidth=1;
 
-        drop.y += drop.speed;
-        if(drop.y > canvas.height){
-            drop.y = -drop.length;
-        }
-    });
+drops.forEach(drop=>{
 
-    requestAnimationFrame(draw);
+ctx.beginPath();
+ctx.moveTo(drop.x,drop.y);
+ctx.lineTo(drop.x,drop.y+drop.length);
+ctx.stroke();
+
+drop.y+=drop.speed;
+
+if(drop.y>canvas.height){
+drop.y=-drop.length;
 }
+
+});
+
+requestAnimationFrame(draw);
+}
+
 draw();
+
 </script>
+
 {% endblock %}
 
 </body>

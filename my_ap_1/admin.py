@@ -1,25 +1,33 @@
 from django.contrib import admin
 from .models import *
+from django.contrib import admin
 from .models import WarehouseLog
-@admin.register(Product)
-class ProductAdmin(admin.ModelAdmin):
 
-    list_display = ("name_uz", "price", "stock", "category")
-    search_fields = ("name_uz",)
-    list_filter = ("category",)
+admin.site.register(WarehouseLog)
+class OrderItemInline(admin.TabularInline):
+    model = OrderItem
+    extra = 1
 
 
+class OrderAdmin(admin.ModelAdmin):
+    list_display = ("id", "retailer", "total_price", "created_at")
+    inlines = [OrderItemInline]
+
+
+admin.site.register(Product)
 admin.site.register(Category)
 admin.site.register(AdminProfile)
 admin.site.register(Profile)
 admin.site.register(B2BRequest)
 admin.site.register(RestockRequest)
-admin.site.register(Order)
 admin.site.register(SupplyRequest)
 admin.site.register(Delivery)
+admin.site.register(ProductVoice)
 
-@admin.register(WarehouseLog)
-class WarehouseLogAdmin(admin.ModelAdmin):
-    list_display = ("product", "action", "quantity", "created_at")
-    list_filter = ("action", "created_at")
-    search_fields = ("product__name_uz",)
+admin.site.register(Restaurant)
+admin.site.register(Food)
+admin.site.register(Courier)
+admin.site.register(FoodOrder)
+admin.site.register(FoodOrderItem)
+
+admin.site.register(Order, OrderAdmin)

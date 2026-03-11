@@ -1,10 +1,182 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8">
-  <title>$Title$</title>
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<link rel="stylesheet" href="{% static 'css/design.css' %}">
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
+
+<title>Courier Order</title>
+
+<style>
+
+.container{
+max-width:1100px;
+margin:auto;
+}
+
+.order-header{
+display:flex;
+justify-content:space-between;
+align-items:center;
+margin-bottom:30px;
+}
+
+.restaurant-card{
+display:flex;
+gap:20px;
+align-items:center;
+}
+
+.restaurant-card img{
+width:80px;
+height:80px;
+border-radius:12px;
+object-fit:cover;
+}
+
+.info p{
+margin:4px 0;
+color:#666;
+}
+
+.progress{
+margin:30px 0;
+}
+
+.progress-bar{
+height:8px;
+background:#ddd;
+border-radius:10px;
+overflow:hidden;
+}
+
+.progress-fill{
+height:8px;
+width:40%;
+background:linear-gradient(45deg,#ff7a00,#ffb347);
+}
+
+.map-card{
+margin-top:20px;
+}
+
+.nav-btn{
+margin-top:20px;
+width:100%;
+padding:14px;
+font-size:16px;
+}
+
+</style>
+
 </head>
+
 <body>
-$END$
+<div style="display:flex;justify-content:space-between;margin-bottom:40px">
+
+<h1>Baraka Market</h1>
+
+<div>
+
+<button class="btn">🛒 Savatcha</button>
+<button class="btn">👤 Profil</button>
+
+</div>
+
+</div>
+
+<div class="container">
+
+<div class="order-header">
+
+<h1 class="title">Order #{{ order.code }}</h1>
+
+</div>
+
+
+<div class="card restaurant-card">
+
+<img src="{{ order.restaurant.image.url }}">
+
+<div class="info">
+
+<h3>{{ order.restaurant.name }}</h3>
+
+<p>👤 {{ order.customer_name }}</p>
+<p>📞 {{ order.customer_phone }}</p>
+
+</div>
+
+</div>
+
+
+<div class="progress">
+
+<div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:8px">
+
+<div>📦 New</div>
+<div>✔ Accepted</div>
+<div>🍔 Picked</div>
+<div>🚴 Delivering</div>
+<div>🏁 Done</div>
+
+</div>
+
+<div class="progress-bar">
+
+<div class="progress-fill"></div>
+
+</div>
+
+</div>
+
+
+<div class="card map-card">
+
+<h3>📍 Restoran lokatsiyasi</h3>
+
+<div id="map" style="height:420px;border-radius:14px;"></div>
+
+<a target="_blank"
+href="https://www.google.com/maps/dir/?api=1&destination={{ order.restaurant.latitude }},{{ order.restaurant.longitude }}">
+
+<button class="btn nav-btn">
+
+🚴 Navigatsiyani boshlash
+
+</button>
+
+</a>
+
+</div>
+
+</div>
+
+
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+<script>
+
+var lat={{ order.restaurant.latitude }};
+var lon={{ order.restaurant.longitude }};
+
+var map=L.map('map').setView([lat,lon],15);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+attribution:'OpenStreetMap'
+}).addTo(map);
+
+var restaurantMarker=L.marker([lat,lon]).addTo(map);
+
+restaurantMarker.bindPopup("{{ order.restaurant.name }}").openPopup();
+
+</script>
+
 </body>
 </html>

@@ -1,10 +1,148 @@
+{% load static %}
+
+<link rel="stylesheet" href="{% static 'css/design.css' %}">
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <title>$Title$</title>
+
+<meta charset="UTF-8">
+
+<style>
+
+body{
+font-family:Inter;
+background:#f7f9fc;
+margin:40px;
+}
+
+.header{
+display:flex;
+gap:30px;
+align-items:center;
+margin-bottom:40px;
+}
+
+.header img{
+width:260px;
+border-radius:18px;
+box-shadow:0 12px 35px rgba(0,0,0,0.12);
+}
+
+.header h1{
+margin:0;
+font-size:34px;
+}
+
+.menu-grid{
+display:grid;
+grid-template-columns:repeat(auto-fill,minmax(250px,1fr));
+gap:25px;
+}
+
+.food-card{
+background:white;
+border-radius:16px;
+overflow:hidden;
+box-shadow:0 10px 25px rgba(0,0,0,0.08);
+transition:0.3s;
+}
+
+.food-card:hover{
+transform:translateY(-6px);
+box-shadow:0 20px 40px rgba(0,0,0,0.15);
+}
+
+.food-card img{
+width:100%;
+height:170px;
+object-fit:cover;
+}
+
+.food-body{
+padding:16px;
+}
+
+.price{
+font-weight:700;
+color:#00a86b;
+margin:8px 0;
+}
+
+.order-btn{
+width:100%;
+padding:12px;
+border:none;
+border-radius:10px;
+background:linear-gradient(45deg,#ff7b00,#ffae00);
+color:white;
+font-weight:600;
+cursor:pointer;
+transition:0.3s;
+}
+
+.order-btn:hover{
+transform:scale(1.04);
+}
+
+</style>
+
 </head>
+
 <body>
-$END$
+<div style="display:flex;justify-content:space-between;margin-bottom:40px">
+
+<h1>Baraka Market</h1>
+
+<div>
+
+<button class="btn">🛒 Savatcha</button>
+<button class="btn">👤 Profil</button>
+
+</div>
+
+</div>
+
+<div class="header">
+
+<img src="{{ restaurant.image.url }}">
+
+<div>
+
+<h1>{{ restaurant.name }}</h1>
+
+<p>{{ restaurant.description }}</p>
+
+</div>
+
+</div>
+
+<h2>Menu</h2>
+
+<div class="menu-grid">
+
+{% for food in foods %}
+
+<div class="food-card">
+
+<img src="{{ food.image.url }}">
+
+<div class="food-body">
+
+<h3>{{ food.name }}</h3>
+
+<div class="price">{{ food.price }} so'm</div>
+
+<a href="/eda/order/{{ food.id }}/">
+<button class="order-btn">Buyurtma berish</button>
+</a>
+
+</div>
+
+</div>
+
+{% endfor %}
+
+</div>
+
 </body>
 </html>
