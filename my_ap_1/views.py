@@ -1,209 +1,406 @@
-from django.contrib.auth.decorators import login_required
-from django.db.models import Q
-from django.contrib.auth.models import User
-from .models import WarehouseLog, Notification, OrderItem, PaymentOTP
-from .models import  Category, AdminProfile, ProductVoice
-from PIL import Image
-from .utils import parse_voice_command
-import torch
-import re
-from .models import Food
+import json
 import random
-from django.core.cache import cache
-from transformers import CLIPProcessor, CLIPModel
+import re
 from datetime import timedelta
-from .models import Food, FoodOrder, FoodOrderItem
-from django.shortcuts import render, redirect, get_object_or_404
-from django.utils import timezone
-from django.db.models import Sum, Count
+from django.contrib.auth import login
+from django.contrib.auth.models import User
+from django.shortcuts import redirect
+from django.core.signing import Signer, BadSignature
+from .models import TelegramProfile
+import torch
+from PIL import Image
+from django.contrib.auth import authenticate, login
+from django.contrib.auth.decorators import login_required
+from django.contrib.auth.models import User
+from django.db import transaction
+from django.db.models import F, Q, Sum
 from django.db.models.functions import TruncDate
+from django.http import JsonResponse
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
+from django.views.decorators.http import require_POST
+from transformers import CLIPModel, CLIPProcessor
+
+from .models import (
+    AdminProfile,
+    B2BRequest,
+    CartItem,
+    Category,
+    Delivery,
+    DistributorSupplier,
+    Food,
+    FoodCart,
+    FoodCartItem,
+    FoodOrder,
+    FoodOrderItem,
+    FoodPayment,
+    Notification,
+    Order,
+    OrderItem,
+    PaymentOTP,
+    Product,
+    ProductVoice,
+    Restaurant,
+    SupplierOrder,
+    SupplierProduct,
+    SupplyRequest,
+    WarehouseLog,
+)
+from .utils import parse_voice_command
+
+
+# =========================================================
+# AI SEARCH CONFIG
+# =========================================================
 IMAGE_FOLDER = "media/products"
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
-
 model = CLIPModel.from_pretrained("openai/clip-vit-base-patch32").to(device)
 processor = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
-
 
 CATEGORIES = {
     "Ko'zoynaklar": ["glasses", "sunglasses", "eyeglasses"],
     "Mobile Telefonlar": ["smartphone", "mobile phone", "iphone"],
     "Soatlar": ["watch", "clock"],
     "Naushnik va aerpotslar": ["earbuds", "airpods", "headphones"],
-    "Kalonkalar": ["speaker", "bluetooth speaker"]
+    "Kalonkalar": ["speaker", "bluetooth speaker"],
 }
 
-def detect_category(image):
 
+# =========================================================
+# HELPERS
+# =========================================================
+def detect_category(image):
     texts = []
     mapping = []
 
     for cat, words in CATEGORIES.items():
-        for w in words:
-            texts.append(f"a photo of {w}")
+        for word in words:
+            texts.append(f"a photo of {word}")
             mapping.append(cat)
 
     inputs = processor(
         text=texts,
         images=image,
         return_tensors="pt",
-        padding=True
+        padding=True,
     ).to(device)
 
     with torch.no_grad():
         outputs = model(**inputs)
 
     probs = outputs.logits_per_image.softmax(dim=1)
-
     best = probs.argmax().item()
-
     return mapping[best]
 
 
-def search_ai(request):
+def extract_price(text):
+    text = text.lower()
 
-    result = []
-    detected_category = None
+    million_match = re.search(r"(\d+)\s*(million|mln)", text)
+    if million_match:
+        return int(million_match.group(1)) * 1_000_000
 
-    if request.method == "POST":
+    number_match = re.search(r"\d{5,}", text)
+    if number_match:
+        return int(number_match.group())
 
-        image_file = request.FILES.get("image")
+    return None
 
-        if image_file:
 
-            image = Image.open(image_file).convert("RGB")
-
-            category = detect_category(image)
-
-            print("Detected:", category)
-
-            detected_category = category
-
-            result = Product.objects.filter(
-                category__name_uz__icontains=category
-            )
-
-    return render(
-        request,
-        "search_ai.html",
-        {
-            "result": result,
-            "detected_category": detected_category
-        }
-    )
-# =========================
-# 🛒 CART HELPERS
-# =========================
 def get_cart_count(request):
     if request.user.is_authenticated:
         return CartItem.objects.filter(user=request.user).count()
+
     cart = request.session.get("cart", {})
     return sum(cart.values())
 
 
 def get_cart_items_and_total(request):
     if request.user.is_authenticated:
-        items = CartItem.objects.filter(user=request.user)
-        cart_items = [{
-            "product": item.product,
-            "quantity": item.quantity,
-            "item_total": item.total_price()
-        } for item in items]
-        total_price = sum(i["item_total"] for i in cart_items)
-    else:
-        cart = request.session.get("cart", {})
-        cart_items = []
-        total_price = 0
-        for pid, qty in cart.items():
-            try:
-                product = Product.objects.get(id=pid)
-                total = product.price * qty
-                total_price += total
-                cart_items.append({
+        items = CartItem.objects.filter(user=request.user).select_related("product")
+        cart_items = [
+            {
+                "product": item.product,
+                "quantity": item.quantity,
+                "item_total": item.total_price(),
+            }
+            for item in items
+        ]
+        total_price = sum(item["item_total"] for item in cart_items)
+        return cart_items, total_price
+
+    cart = request.session.get("cart", {})
+    cart_items = []
+    total_price = 0
+
+    for pid, qty in cart.items():
+        try:
+            product = Product.objects.get(id=pid)
+            item_total = product.price * qty
+            total_price += item_total
+            cart_items.append(
+                {
                     "product": product,
                     "quantity": qty,
-                    "item_total": total
-                })
-            except Product.DoesNotExist:
-                pass
+                    "item_total": item_total,
+                }
+            )
+        except Product.DoesNotExist:
+            continue
+
     return cart_items, total_price
 
 
-# =========================
-# 🏠 HOME
-# =========================
-def home_view(request):
-    query = request.GET.get("q")
+def calculate_restock_predictions(user):
+    predictions = []
 
+    today = timezone.now().date()
+    last_week = today - timedelta(days=7)
     products = Product.objects.all()
+
+    for product in products:
+        sales = OrderItem.objects.filter(
+            order__retailer=user,
+            product=product,
+            order__created_at__date__gte=last_week,
+        )
+
+        total_sold = sales.aggregate(total=Sum("quantity"))["total"] or 0
+        daily_avg = total_sold / 7 if total_sold else 0
+
+        if daily_avg > 0:
+            days_left = product.stock / daily_avg if daily_avg else 0
+            if days_left < 5:
+                recommended = int(daily_avg * 14)
+                predictions.append(
+                    {
+                        "product": product,
+                        "daily_avg": round(daily_avg, 2),
+                        "days_left": round(days_left, 1),
+                        "recommended": recommended,
+                    }
+                )
+
+    return predictions
+
+
+def _ensure_food_cart(user):
+    cart, _ = FoodCart.objects.get_or_create(user=user)
+    return cart
+
+
+# =========================================================
+# LANDING / PUBLIC PAGES
+# =========================================================
+def landing(request):
+    return render(request, "landing.html")
+
+
+def home_view(request):
+    if request.user.is_authenticated:
+        profile = getattr(request.user, "profile", None)
+        if profile and profile.role:
+            role = profile.role.lower()
+            if role == "supplier":
+                return redirect("supplier_dashboard")
+            if role == "distributor":
+                return redirect("distributor_dashboard")
+
+    query = request.GET.get("q", "").strip()
+    category_id = request.GET.get("category")
+
+    products = Product.objects.all().select_related("category", "seller")
+
     if query:
         products = products.filter(
-            Q(name_uz__icontains=query) |
-            Q(name_en__icontains=query) |
-            Q(name_ru__icontains=query) |
-            Q(description_uz__icontains=query) |
-            Q(description_en__icontains=query) |
-            Q(description_ru__icontains=query)
+            Q(name_uz__icontains=query)
+            | Q(name_en__icontains=query)
+            | Q(name_ru__icontains=query)
+            | Q(description_uz__icontains=query)
+            | Q(description_en__icontains=query)
+            | Q(description_ru__icontains=query)
         )
+
+    if category_id:
+        products = products.filter(category_id=category_id)
 
     categories = Category.objects.all()
     admin_info = AdminProfile.objects.first()
 
-    return render(request, "home.html", {
-        "products": products,
-        "categories": categories,
-        "admin_info": admin_info,
-        "cart_item_count": get_cart_count(request)
-    })
+    return render(
+        request,
+        "home.html",
+        {
+            "products": products,
+            "categories": categories,
+            "admin_info": admin_info,
+            "cart_item_count": get_cart_count(request),
+            "query": query,
+            "selected_category_id": category_id,
+        },
+    )
 
 
-# =========================
-# 📂 CATEGORY PRODUCTS
-# =========================
 def category_products(request, category_id):
     category = get_object_or_404(Category, id=category_id)
     products = Product.objects.filter(category=category)
     categories = Category.objects.all()
 
-    return render(request, "home.html", {
-        "products": products,
-        "categories": categories,
-        "selected_category": category,   # ✅ object
-        "cart_item_count": get_cart_count(request)
-    })
+    return render(
+        request,
+        "home.html",
+        {
+            "products": products,
+            "categories": categories,
+            "selected_category": category,
+            "selected_category_id": category.id,
+            "cart_item_count": get_cart_count(request),
+        },
+    )
 
 
-# =========================
-# 📦 PRODUCT DETAIL
-# =========================
 def product_detail(request, pk):
     product = get_object_or_404(Product, pk=pk)
-    return render(request, "product_detail.html", {
-        "product": product,
-        "cart_item_count": get_cart_count(request)
-    })
+    return render(
+        request,
+        "product_detail.html",
+        {
+            "product": product,
+            "cart_item_count": get_cart_count(request),
+        },
+    )
 
 
-# =========================
-# 🛒 CART VIEWS
-# =========================
+def about_view(request):
+    admin_info = AdminProfile.objects.first()
+    return render(
+        request,
+        "about.html",
+        {
+            "admin_info": admin_info,
+            "cart_item_count": get_cart_count(request),
+        },
+    )
+
+
+# =========================================================
+# AI / CHAT / VOICE
+# =========================================================
+def search_ai(request):
+    result = []
+    detected_category = None
+
+    if request.method == "POST":
+        image_file = request.FILES.get("image")
+        if image_file:
+            image = Image.open(image_file).convert("RGB")
+            detected_category = detect_category(image)
+            result = Product.objects.filter(category__name_uz__icontains=detected_category)
+
+    return render(
+        request,
+        "search_ai.html",
+        {
+            "result": result,
+            "detected_category": detected_category,
+        },
+    )
+
+
+def chatbot(request):
+    if request.method == "POST":
+        data = json.loads(request.body)
+        message = data.get("message", "").lower()
+        price = extract_price(message)
+
+        if "telefon" in message:
+            products = Product.objects.filter(category__name_uz__icontains="telefon")
+
+            if price:
+                filtered = products.filter(price__lte=price)
+                if not filtered.exists():
+                    cheapest = products.order_by("price").first()
+                    if cheapest:
+                        return JsonResponse(
+                            {
+                                "type": "text",
+                                "reply": f"Kechirasiz, {price} UZS dan arzon telefon yo‘q. Eng arzoni {cheapest.price} UZS.",
+                            }
+                        )
+                    return JsonResponse({"type": "text", "reply": "Telefon topilmadi."})
+                products = filtered
+
+            products = products.order_by("price")[:5]
+            result = []
+
+            for product in products:
+                image_url = product.image.url if product.image else ""
+                result.append(
+                    {
+                        "id": product.id,
+                        "name": str(product),
+                        "price": product.price,
+                        "image": image_url,
+                    }
+                )
+
+            return JsonResponse({"type": "products", "products": result})
+
+        return JsonResponse(
+            {
+                "type": "text",
+                "reply": "Qanday mahsulot kerak? Masalan: telefon, soat yoki naushnik.",
+            }
+        )
+
+    return render(request, "chatbot.html")
+
+
+def voice_search(request):
+    body = json.loads(request.body)
+    text = body.get("text")
+    filters = parse_voice_command(text)
+    products = ProductVoice.objects.filter(**filters)[:10]
+
+    data = []
+    for product in products:
+        data.append(
+            {
+                "name": product.name,
+                "price": product.price,
+                "ram": product.ram,
+            }
+        )
+
+    return JsonResponse({"products": data})
+
+
+def voice_page(request):
+    return render(request, "voice_search.html")
+
+
+# =========================================================
+# B2C CART
+# =========================================================
 def cart_view(request):
     cart_items, total_price = get_cart_items_and_total(request)
-    return render(request, "cart.html", {
-        "cart_items": cart_items,
-        "total_price": total_price,
-        "cart_item_count": get_cart_count(request)
-    })
+    return render(
+        request,
+        "cart.html",
+        {
+            "cart_items": cart_items,
+            "total_price": total_price,
+            "cart_item_count": get_cart_count(request),
+        },
+    )
 
 
 def add_to_cart(request, product_id):
     product = get_object_or_404(Product, id=product_id)
 
     if request.user.is_authenticated:
-        item, created = CartItem.objects.get_or_create(
-            user=request.user,
-            product=product
-        )
+        item, created = CartItem.objects.get_or_create(user=request.user, product=product)
         if not created:
             item.quantity += 1
             item.save()
@@ -217,10 +414,7 @@ def add_to_cart(request, product_id):
 
 def remove_from_cart(request, product_id):
     if request.user.is_authenticated:
-        item = CartItem.objects.filter(
-            user=request.user,
-            product_id=product_id
-        ).first()
+        item = CartItem.objects.filter(user=request.user, product_id=product_id).first()
         if item:
             if item.quantity > 1:
                 item.quantity -= 1
@@ -241,10 +435,7 @@ def remove_from_cart(request, product_id):
 
 def delete_from_cart(request, product_id):
     if request.user.is_authenticated:
-        CartItem.objects.filter(
-            user=request.user,
-            product_id=product_id
-        ).delete()
+        CartItem.objects.filter(user=request.user, product_id=product_id).delete()
     else:
         cart = request.session.get("cart", {})
         cart.pop(str(product_id), None)
@@ -259,16 +450,14 @@ def clear_cart(request):
     else:
         request.session["cart"] = {}
     return redirect("cart_view")
+
+
 def update_cart(request, product_id):
     if request.method == "POST":
         quantity = int(request.POST.get("quantity", 1))
 
         if request.user.is_authenticated:
-            item = CartItem.objects.filter(
-                user=request.user,
-                product_id=product_id
-            ).first()
-
+            item = CartItem.objects.filter(user=request.user, product_id=product_id).first()
             if item:
                 if quantity > 0:
                     item.quantity = quantity
@@ -289,883 +478,13 @@ def update_cart(request, product_id):
     return redirect("cart_view")
 
 
-def about_view(request):
-    admin_info = AdminProfile.objects.first()
-    return render(request, "about.html", {
-        "admin_info": admin_info,
-        "cart_item_count": get_cart_count(request)
-    })
-
-
-#
-# # =========================
-# # 💬 CHATBOT
-# # =========================
-# def chat_with_ai(request):
-#     if request.method == "POST":
-#         import json
-#         data = json.loads(request.body)
-#         user_input = data.get("user_input", "")
-#
-#         if not user_input:
-#             return JsonResponse({"answer": "Savol bo‘sh!"})
-#
-#         response = openai.ChatCompletion.create(
-#             model="gpt-4o-mini",
-#             messages=[{"role": "user", "content": user_input}],
-#             temperature=0.7
-#         )
-#
-#         return JsonResponse({
-#             "answer": response.choices[0].message["content"]
-#         })
-#
-#     return render(request, "chatbot.html", {
-#         "cart_item_count": get_cart_count(request)
-#     })
-#
-#
-
-from django.shortcuts import render
-from django.http import JsonResponse
-from .models import (
-    Product,
-    CartItem,
-    B2BRequest,
-    RestockRequest,
-    Order,
-    SupplyRequest,
-    Delivery
-)
-
-import json
-
-
-from django.shortcuts import render
-from django.http import JsonResponse
-from .models import Product
-import json
-
-
-from django.shortcuts import render
-from django.http import JsonResponse
-from .models import Product
-import json
-
-
-def chatbot(request):
-
-    if request.method == "POST":
-
-        data = json.loads(request.body)
-        message = data.get("message", "").lower()
-
-        price = extract_price(message)
-
-        # TELEFON
-        if "telefon" in message:
-
-            products = Product.objects.filter(
-                category__name_uz__icontains="telefon"
-            )
-
-            # agar narx so'ralgan bo'lsa
-            if price:
-
-                filtered = products.filter(price__lte=price)
-
-                # agar topilmasa
-                if not filtered.exists():
-
-                    cheapest = products.order_by("price").first()
-
-                    return JsonResponse({
-                        "type": "text",
-                        "reply": f"Kechirasiz, {price} UZS dan arzon telefon yo‘q. Eng arzoni {cheapest.price} UZS."
-                    })
-
-                products = filtered
-
-            products = products.order_by("price")[:5]
-
-            result = []
-
-            for p in products:
-
-                image_url = p.image.url if p.image else ""
-
-                result.append({
-                    "id": p.id,
-                    "name": str(p),
-                    "price": p.price,
-                    "image": image_url
-                })
-
-            return JsonResponse({
-                "type": "products",
-                "products": result
-            })
-
-        return JsonResponse({
-            "type": "text",
-            "reply": "Qanday mahsulot kerak? Masalan: telefon, soat yoki naushnik."
-        })
-
-    return render(request, "chatbot.html")
-@login_required
-def create_b2b_request(request, product_id):
-
-    product = get_object_or_404(Product, id=product_id)
-
-    B2BRequest.objects.create(
-        retailer=request.user,
-        product=product,
-        quantity=50
-    )
-
-    return redirect("b2b_dashboard")
-
-
-@login_required
-def create_supply_request(request, product_id):
-
-    product = get_object_or_404(Product, id=product_id)
-
-    req = SupplyRequest.objects.create(
-        retailer=request.user,
-        product=product,
-        quantity=10
-    )
-
-    # 🔔 notification distributor uchun
-    distributors = User.objects.filter(profile__role="distributor")
-
-    for d in distributors:
-        Notification.objects.create(
-            user=d,
-            message=f"New supply request for {product.name_uz}"
-        )
-
-    return redirect("b2b_dashboard")
-
-
-@login_required
-def distributor_dashboard(request):
-
-    if request.user.profile.role != "distributor":
-        return redirect("home")
-
-    requests = SupplyRequest.objects.all().order_by("-id")
-
-    return render(
-        request,
-        "b2b/distributor_dashboard.html",
-        {
-            "requests": requests
-        }
-    )
-def b2b_orders(request):
-
-    orders = B2BRequest.objects.filter(
-        retailer=request.user
-    ).order_by("-created_at")
-
-    return render(
-        request,
-        "b2b/orders.html",
-        {"orders": orders}
-    )
-@login_required
-def approve_request(request, request_id):
-
-    if request.user.profile.role != "distributor":
-        return redirect("home")
-
-    req = get_object_or_404(SupplyRequest, id=request_id)
-
-    req.status = "sent"
-    req.save()
-
-    # Delivery yaratamiz
-    Delivery.objects.create(
-        request=req,
-        status="active"
-    )
-
-    return redirect("distributor_dashboard")
-def low_stock(request):
-
-    products = Product.objects.filter(stock__lt=10)
-
-    return render(
-        request,
-        "b2b/low_stock.html",
-        {"products": products}
-    )
-from datetime import timedelta
-from django.db.models import Sum
-
-from datetime import timedelta
-
-@login_required
-def b2b_dashboard(request):
-
-    today = timezone.now().date()
-
-    # 🛒 Bugungi buyurtmalar
-    today_orders = Order.objects.filter(
-        retailer=request.user,
-        created_at__date=today
-    )
-
-    today_sales = today_orders.aggregate(
-        total=Sum("total_price")
-    )["total"] or 0
-
-
-    # 📉 Kam qolgan mahsulotlar
-    low_stock_products = Product.objects.filter(
-        stock__lt=10
-    ).order_by("stock")
-
-    low_stock_count = low_stock_products.count()
-
-
-    # 📦 Retailer yuborgan requestlar
-    requests_count = SupplyRequest.objects.filter(
-        retailer=request.user
-    ).count()
-
-
-    # 🚚 Aktiv yetkazmalar
-    active_deliveries = Delivery.objects.filter(
-        request__retailer=request.user,
-        status="active"
-    ).count()
-
-
-    # 🤖 AI recommendation
-    ai_recommendations = Product.objects.order_by("stock")[:3]
-
-
-    # 📊 7 kunlik sales chart
-    sales_labels = []
-    sales_data = []
-
-    for i in range(6, -1, -1):
-
-        day = today - timedelta(days=i)
-
-        total = Order.objects.filter(
-            retailer=request.user,
-            created_at__date=day
-        ).aggregate(
-            total=Sum("total_price")
-        )["total"] or 0
-
-        sales_labels.append(day.strftime("%a"))
-        sales_data.append(float(total))
-
-
-    context = {
-        "today_sales": today_sales,
-        "low_stock_products": low_stock_products,
-        "low_stock_count": low_stock_count,
-        "requests_count": requests_count,
-        "active_deliveries": active_deliveries,
-        "ai_recommendations": ai_recommendations,
-
-        "sales_labels": sales_labels,
-        "sales_data": sales_data,
-    }
-
-    return render(
-        request,
-        "b2b/b2b_dashboard.html",
-        context
-    )
-@login_required
-def sales_analytics(request):
-
-    today = timezone.now().date()
-
-    sales_labels = []
-    sales_data = []
-
-    for i in range(6, -1, -1):
-
-        day = today - timedelta(days=i)
-
-        total = Order.objects.filter(
-            retailer=request.user,
-            created_at__date=day
-        ).aggregate(
-            total=Sum("total_price")
-        )["total"] or 0
-
-        sales_labels.append(day.strftime("%a"))
-        sales_data.append(float(total))
-
-    context = {
-        "sales_labels": sales_labels,
-        "sales_data": sales_data
-    }
-
-    return render(
-        request,
-        "b2b/statistics.html",
-        context
-    )
-
-@login_required
-def stock_in(request, product_id):
-
-    product = get_object_or_404(Product, id=product_id)
-
-    quantity = int(request.POST.get("quantity", 1))
-
-    product.stock += quantity
-    product.save()
-
-    WarehouseLog.objects.create(
-        product=product,
-        quantity=quantity,
-        action="in",
-        note="Manual stock update"
-    )
-
-    return redirect("warehouse_dashboard")
-
-
-@login_required
-def stock_out(request, product_id):
-
-    product = get_object_or_404(Product, id=product_id)
-
-    quantity = int(request.POST.get("quantity", 1))
-
-    product.stock -= quantity
-    product.save()
-
-    WarehouseLog.objects.create(
-        product=product,
-        quantity=quantity,
-        action="out",
-        note="Stock reduced"
-    )
-
-    return redirect("warehouse_dashboard")
-@login_required
-def warehouse_dashboard(request):
-
-    products = Product.objects.all().order_by("stock")
-
-    logs = WarehouseLog.objects.all().order_by("-created_at")[:10]
-
-    context = {
-        "products": products,
-        "logs": logs
-    }
-
-    return render(request, "b2b/warehouse.html", context)
-
-def calculate_restock_predictions(user):
-
-    predictions = []
-
-    today = timezone.now().date()
-    last_week = today - timedelta(days=7)
-
-    products = Product.objects.all()
-
-    for product in products:
-
-        sales = OrderItem.objects.filter(
-            order__retailer=user,
-            product=product,
-            order__created_at__date__gte=last_week
-        )
-
-        total_sold = sales.aggregate(
-            total=Sum("quantity")
-        )["total"] or 0
-
-        daily_avg = total_sold / 7 if total_sold else 0
-
-        if daily_avg > 0:
-
-            days_left = product.stock / daily_avg if daily_avg else 0
-
-            if days_left < 5:
-
-                recommended = int(daily_avg * 14)
-
-                predictions.append({
-                    "product": product,
-                    "daily_avg": round(daily_avg, 2),
-                    "days_left": round(days_left, 1),
-                    "recommended": recommended
-                })
-
-    return predictions
-@login_required
-def ai_assistant(request):
-
-    today = timezone.now().date()
-    last_week = today - timedelta(days=7)
-
-    # eng ko‘p sotilgan mahsulotlar
-    top_products = (
-        OrderItem.objects.filter(
-            order__retailer=request.user
-        )
-        .values("product__name_uz")
-        .annotate(total_sold=Sum("quantity"))
-        .order_by("-total_sold")[:10]
-    )
-
-    # kam qolgan mahsulotlar
-    low_stock_products = Product.objects.filter(
-        stock__lt=10
-    ).order_by("stock")[:5]
-
-    # AI restock prediction
-    predictions = calculate_restock_predictions(request.user)
-
-    context = {
-        "top_products": top_products,
-        "low_stock_products": low_stock_products,
-        "predictions": predictions,
-    }
-
-    return render(
-        request,
-        "b2b/ai_assistant.html",
-        context
-    )
-@login_required
-def notifications(request):
-
-    notifications = Notification.objects.filter(
-        user=request.user
-    ).order_by("-created_at")
-
-    return render(
-        request,
-        "b2b/notifications.html",
-        {"notifications": notifications}
-    )
-
-@login_required
-def sales_analytics(request):
-
-    today = timezone.now().date()
-
-    sales_labels = []
-    sales_data = []
-
-    for i in range(6, -1, -1):
-
-        day = today - timedelta(days=i)
-
-        total = Order.objects.filter(
-            retailer=request.user,
-            created_at__date=day
-        ).aggregate(
-            total=Sum("total_price")
-        )["total"] or 0
-
-        sales_labels.append(day.strftime("%a"))
-        sales_data.append(float(total))
-
-
-    # TOP SELLING PRODUCTS
-    top_products = (
-        OrderItem.objects
-        .values("product__name_uz")
-        .annotate(total_sold=Sum("quantity"))
-        .order_by("-total_sold")[:10]
-    )
-
-
-    context = {
-        "sales_labels": sales_labels,
-        "sales_data": sales_data,
-        "top_products": top_products
-    }
-
-    return render(
-        request,
-        "b2b/statistics.html",
-        context
-    )
-@login_required
-def checkout(request):
-
-    cart_items = CartItem.objects.filter(user=request.user)
-
-    if not cart_items:
-        return redirect("cart_view")
-
-    total = 0
-
-    # ORDER yaratamiz (payment hali qilinmagan)
-    order = Order.objects.create(
-        retailer=request.user,
-        total_price=0,
-        order_type="b2c",
-        status="pending"
-    )
-
-    for item in cart_items:
-
-        item_total = item.product.price * item.quantity
-
-        OrderItem.objects.create(
-            order=order,
-            product=item.product,
-            quantity=item.quantity,
-            price=item.product.price
-        )
-
-        total += item_total
-
-    order.total_price = total
-    order.save()
-
-    # payment sahifa uchun order id sessionga saqlaymiz
-    request.session["payment_order_id"] = order.id
-
-    return redirect("payment_page")
-
-def order_success(request):
-    return render(request, "order_success.html")
-def voice_search(request):
-
-    body = json.loads(request.body)
-    text = body.get("text")
-
-    filters = parse_voice_command(text)
-
-    products = ProductVoice.objects.filter(**filters)[:10]
-
-    data = []
-
-    for p in products:
-        data.append({
-            "name": p.name,
-            "price": p.price,
-            "ram": p.ram,
-        })
-
-    return JsonResponse({"products": data})
-
-def voice_page(request):
-    return render(request, "voice_search.html")
-def home(request):
-
-    q = request.GET.get("q")
-
-    products = Product.objects.all()
-
-    if q:
-
-        filters = parse_voice_command(q)
-
-        # CATEGORY FILTER
-        if "category" in filters:
-            products = products.filter(
-                category__name_uz=filters["category"]
-            )
-
-        # PRICE FILTER
-        if "price__lt" in filters:
-            products = products.filter(
-                price__lt=filters["price__lt"]
-            )
-
-        # RAM FILTER
-        if "ram" in filters:
-            products = products.filter(
-                ram=filters["ram"]
-            )
-
-    context = {
-        "products": products
-    }
-
-    return render(request, "home.html", context)
-
-from django.contrib.auth.decorators import login_required
-
-from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
-from .models import Product, CartItem
-
-
-@csrf_exempt
-def add_to_cart_api(request, product_id):
-
-    if request.method == "POST":
-
-        try:
-
-            product = Product.objects.get(id=product_id)
-
-            CartItem.objects.create(
-                product=product,
-                quantity=1
-            )
-
-            return JsonResponse({"success": True})
-
-        except Exception as e:
-
-            return JsonResponse({"success": False, "error": str(e)})
-
-    return JsonResponse({"success": False})
-
-
-def extract_price(text):
-
-    text = text.lower()
-
-    # 2 million
-    million_match = re.search(r'(\d+)\s*(million|mln)', text)
-    if million_match:
-        return int(million_match.group(1)) * 1000000
-
-    # 2000000
-    number_match = re.search(r'\d{5,}', text)
-    if number_match:
-        return int(number_match.group())
-
-    return None
-from django.shortcuts import render
-from .models import Restaurant
-
-
-def restaurant_list(request):
-
-    restaurants = Restaurant.objects.all()
-
-    context = {
-        "restaurants": restaurants
-    }
-
-    return render(request, "eda/restaurants.html", context)
-
-def restaurant_detail(request, pk):
-
-    restaurant = get_object_or_404(Restaurant, id=pk)
-
-    foods = Food.objects.filter(restaurant=restaurant)
-
-    context = {
-        "restaurant": restaurant,
-        "foods": foods
-    }
-
-    return render(request, "eda/restaurant_detail.html", context)
-
-
-def create_food_order(request, food_id):
-
-    food = Food.objects.get(id=food_id)
-
-    order = FoodOrder.objects.create(
-        restaurant=food.restaurant,
-        customer_name="Test User",
-        customer_phone="998901234567",
-        latitude=41.3111,
-        longitude=69.2797
-    )
-
-    FoodOrderItem.objects.create(
-        order=order,
-        food=food,
-        quantity=1
-    )
-
-    return redirect("/eda/restaurants/")
-
-def courier_orders(request):
-    orders = FoodOrder.objects.filter(status="new")
-
-    context = {
-        "orders": orders
-    }
-
-    return render(request, "eda/courier_orders.html", context)
-def accept_order(request, order_id):
-    order = get_object_or_404(FoodOrder, id=order_id)
-
-    order.status = "accepted"
-    order.save()
-
-    return redirect("/eda/courier/orders/")
-def courier_order_detail(request, order_id):
-
-    order = FoodOrder.objects.get(id=order_id)
-
-    context = {
-        "order": order
-    }
-
-    return render(request, "eda/courier_order_detail.html", context)
-
-
-def b2b_sales_dashboard(request):
-
-    today = timezone.now().date()
-
-    b2c_today_sales = (
-        OrderItem.objects.filter(
-            product__seller=request.user,
-            order__status="paid",
-            order__created_at__date=today
-        ).aggregate(total=Sum("price"))
-    )
-
-    daily_sales = (
-        OrderItem.objects.filter(
-            product__seller=request.user,
-            order__status="paid"
-        )
-        .annotate(day=TruncDate("order__created_at"))
-        .values("day")
-        .annotate(total=Sum("price"))
-        .order_by("-day")[:7]
-    )
-
-    top_products = (
-        OrderItem.objects.filter(
-            product__seller=request.user,
-            order__status="paid"
-        )
-        .values("product__name")
-        .annotate(total_sold=Count("id"))
-        .order_by("-total_sold")[:5]
-    )
-
-    context = {
-        "b2c_today_sales": b2c_today_sales["total"] or 0,
-        "daily_sales": daily_sales,
-        "top_products": top_products,
-    }
-
-    return render(request, "b2b/b2b_dashboard.html", context)
-@login_required
-def confirm_payment(request):
-
-    order_id = request.session.get("payment_order_id")
-
-    if not order_id:
-        return redirect("home")
-
-    order = Order.objects.get(id=order_id)
-
-    items = OrderItem.objects.filter(order=order)
-
-    for item in items:
-
-        product = item.product
-        product.stock -= item.quantity
-        product.save()
-
-    order.status = "paid"
-    order.save()
-
-    CartItem.objects.filter(user=request.user).delete()
-
-    return redirect("order_success")
-@login_required
-def payment_page(request):
-
-    order_id = request.session.get("payment_order_id")
-
-    if not order_id:
-        return redirect("home")
-
-    order = Order.objects.get(id=order_id)
-
-    return render(
-        request,
-        "payment.html",
-        {
-            "order": order
-        }
-    )
-def send_payment_code(request):
-
-    if request.method == "POST":
-
-        data = json.loads(request.body)
-
-        phone = data.get("phone")
-
-        if not phone:
-            return JsonResponse({"success": False, "error": "Telefon kiritilmadi"})
-
-        code = str(random.randint(100000, 999999))
-
-        PaymentOTP.objects.create(
-            user=request.user,
-            phone=phone,
-            code=code
-        )
-
-        print("SMS CODE:", code)
-
-        return JsonResponse({"success": True})
-@login_required
-def verify_payment(request):
-
-    code = request.POST.get("code")
-
-    otp = PaymentOTP.objects.filter(
-        user=request.user,
-        code=code
-    ).last()
-
-    if not otp:
-        return redirect("payment_page")
-
-    order_id = request.session.get("payment_order_id")
-
-    if not order_id:
-        return redirect("home")
-
-    order = Order.objects.get(id=order_id)
-
-    items = OrderItem.objects.filter(order=order)
-
-    for item in items:
-
-        product = item.product
-        product.stock -= item.quantity
-        product.save()
-
-    order.status = "paid"
-    order.save()
-
-    CartItem.objects.filter(user=request.user).delete()
-
-    # sessionni tozalaymiz
-    del request.session["payment_order_id"]
-
-    return redirect("order_success")
-@login_required
 def buy_now(request, product_id):
-
     product = get_object_or_404(Product, id=product_id)
 
-    # agar cartda shu product bo'lsa quantity oshiramiz
-    item, created = CartItem.objects.get_or_create(
-        user=request.user,
-        product=product
-    )
+    if not request.user.is_authenticated:
+        return redirect(f"/login/?next=/buy-now/{product_id}/")
 
+    item, created = CartItem.objects.get_or_create(user=request.user, product=product)
     if not created:
         item.quantity += 1
         item.save()
@@ -1173,4 +492,684 @@ def buy_now(request, product_id):
     return redirect("checkout")
 
 
-foods = Food.objects.all()[:10]
+# =========================================================
+# B2C CHECKOUT / PAYMENT
+# =========================================================
+@login_required(login_url="/login/")
+def checkout(request):
+    cart_items = CartItem.objects.filter(user=request.user).select_related("product")
+
+    if not cart_items.exists():
+        return redirect("cart_view")
+
+    with transaction.atomic():
+        previous_order_id = request.session.get("payment_order_id")
+        if previous_order_id:
+            Order.objects.filter(
+                id=previous_order_id,
+                retailer=request.user,
+                status="pending",
+            ).delete()
+
+        total = 0
+        order_items_payload = []
+
+        for item in cart_items:
+            if item.quantity > item.product.stock:
+                return redirect("cart_view")
+            item_total = item.product.price * item.quantity
+            total += item_total
+            order_items_payload.append(item)
+
+        order = Order.objects.create(
+            retailer=request.user,
+            total_price=total,
+            order_type="b2c",
+            status="pending",
+        )
+
+        for item in order_items_payload:
+            OrderItem.objects.create(
+                order=order,
+                product=item.product,
+                quantity=item.quantity,
+                price=item.product.price,
+            )
+
+        request.session["payment_order_id"] = order.id
+        request.session.modified = True
+
+    return redirect("payment_page")
+
+
+def order_success(request):
+    return render(request, "order_success.html")
+
+
+@login_required
+def payment_page(request):
+    order_id = request.session.get("payment_order_id")
+    if not order_id:
+        return redirect("home")
+
+    order = get_object_or_404(Order, id=order_id, retailer=request.user)
+    return render(request, "payment.html", {"order": order})
+
+
+@login_required
+@require_POST
+def send_payment_code(request):
+    data = json.loads(request.body)
+    phone = data.get("phone")
+
+    if not phone:
+        return JsonResponse({"success": False, "error": "Telefon raqami kiritilmadi"})
+
+    code = str(random.randint(100000, 999999))
+    PaymentOTP.objects.create(user=request.user, phone=phone, code=code)
+
+    print("🔥 OTP:", code)
+    return JsonResponse({"success": True, "code": code})
+
+
+@login_required
+def verify_payment(request):
+    code = request.POST.get("code")
+
+    otp = PaymentOTP.objects.filter(user=request.user, code=code).last()
+    if not otp:
+        return redirect("payment_page")
+
+    order_id = request.session.get("payment_order_id")
+    if not order_id:
+        return redirect("home")
+
+    order = get_object_or_404(Order, id=order_id, retailer=request.user)
+
+    if order.status == "paid":
+        return redirect("order_success")
+
+    items = OrderItem.objects.filter(order=order).select_related("product")
+
+    with transaction.atomic():
+        for item in items:
+            product = item.product
+            if product.stock < item.quantity:
+                return redirect("cart_view")
+
+        for item in items:
+            product = item.product
+            product.stock -= item.quantity
+            product.save(update_fields=["stock"])
+
+        order.status = "paid"
+        order.save(update_fields=["status"])
+
+        CartItem.objects.filter(user=request.user).delete()
+        request.session.pop("payment_order_id", None)
+
+    return redirect("order_success")
+
+
+# =========================================================
+# B2C DASHBOARD
+# =========================================================
+@login_required
+def b2c_dashboard(request):
+    if not request.user.is_superuser:
+        return redirect("hr_dashboard")
+
+    today = timezone.now().date()
+
+    order_items = OrderItem.objects.filter(
+        order__order_type="b2c",
+        order__status="paid",
+        order__created_at__date=today,
+    )
+
+    today_sales = order_items.aggregate(total=Sum(F("price") * F("quantity")))["total"] or 0
+    today_orders_count = order_items.values("order").distinct().count()
+
+    top_products = (
+        OrderItem.objects.filter(order__status="paid")
+        .values("product__name_uz")
+        .annotate(total_sold=Sum("quantity"))
+        .order_by("-total_sold")[:5]
+    )
+
+    low_stock_products = Product.objects.filter(stock__lte=7)
+
+    return render(
+        request,
+        "b2c/dashboard.html",
+        {
+            "today_sales": today_sales,
+            "today_orders_count": today_orders_count,
+            "top_products": top_products,
+            "low_stock_products": low_stock_products,
+        },
+    )
+
+
+# =========================================================
+# B2B
+# =========================================================
+@login_required
+def create_b2b_request(request, product_id):
+    product = get_object_or_404(Product, id=product_id)
+    B2BRequest.objects.create(retailer=request.user, product=product, quantity=50)
+    return redirect("b2b_dashboard")
+
+
+@login_required
+def create_supply_request(request, product_id):
+    product = get_object_or_404(Product, id=product_id)
+
+    SupplyRequest.objects.create(retailer=request.user, product=product, quantity=10)
+
+    distributors = User.objects.filter(profile__role="distributor")
+    for distributor in distributors:
+        Notification.objects.create(
+            user=distributor,
+            message=f"New supply request for {product.name_uz}",
+        )
+
+    return redirect("b2b_dashboard")
+
+
+@login_required
+def distributor_dashboard(request):
+    if request.user.profile.role != "distributor":
+        return redirect("home")
+
+    requests = SupplyRequest.objects.all().order_by("-id")
+    suppliers = DistributorSupplier.objects.filter(distributor=request.user)
+
+    return render(
+        request,
+        "b2b/distributor_dashboard.html",
+        {
+            "requests": requests,
+            "suppliers": suppliers,
+        },
+    )
+
+
+@login_required
+def b2b_orders(request):
+    orders = B2BRequest.objects.filter(retailer=request.user).order_by("-created_at")
+    return render(request, "b2b/orders.html", {"orders": orders})
+
+
+@login_required
+def approve_request(request, request_id):
+    if request.user.profile.role != "distributor":
+        return redirect("home")
+
+    supply_request = get_object_or_404(SupplyRequest, id=request_id)
+    supply_request.status = "sent"
+    supply_request.save(update_fields=["status"])
+
+    Delivery.objects.create(request=supply_request, status="active")
+    return redirect("distributor_dashboard")
+
+
+@login_required
+def b2b_dashboard(request):
+    b2b_orders_qs = Order.objects.filter(
+        retailer=request.user,
+        order_type="b2b",
+        status="paid",
+    )
+
+    total_sales = b2b_orders_qs.aggregate(total=Sum("total_price"))["total"] or 0
+
+    low_stock_products = Product.objects.filter(stock__lte=7).order_by("stock")
+    low_stock_count = low_stock_products.count()
+
+    requests_count = SupplyRequest.objects.filter(retailer=request.user).count()
+    active_deliveries = Delivery.objects.filter(
+        request__retailer=request.user,
+        status="active",
+    ).count()
+
+    top_products = (
+        OrderItem.objects.filter(order__retailer=request.user, order__status="paid")
+        .values("product__name_uz")
+        .annotate(total_sold=Sum("quantity"))
+        .order_by("-total_sold")[:5]
+    )
+
+    return render(
+        request,
+        "b2b/b2b_dashboard.html",
+        {
+            "total_sales": total_sales,
+            "low_stock_products": low_stock_products,
+            "low_stock_count": low_stock_count,
+            "requests_count": requests_count,
+            "active_deliveries": active_deliveries,
+            "top_products": top_products,
+        },
+    )
+
+
+@login_required
+def sales_analytics(request):
+    today = timezone.now().date()
+    sales_labels = []
+    sales_data = []
+
+    for i in range(6, -1, -1):
+        day = today - timedelta(days=i)
+        total = (
+            Order.objects.filter(retailer=request.user, created_at__date=day)
+            .aggregate(total=Sum("total_price"))["total"]
+            or 0
+        )
+        sales_labels.append(day.strftime("%a"))
+        sales_data.append(float(total))
+
+    top_products = (
+        OrderItem.objects.values("product__name_uz")
+        .annotate(total_sold=Sum("quantity"))
+        .order_by("-total_sold")[:10]
+    )
+
+    return render(
+        request,
+        "b2b/statistics.html",
+        {
+            "sales_labels": sales_labels,
+            "sales_data": sales_data,
+            "top_products": top_products,
+        },
+    )
+
+
+@login_required
+def stock_in(request, product_id):
+    product = get_object_or_404(Product, id=product_id)
+    quantity = int(request.POST.get("quantity", 1))
+
+    if quantity <= 0:
+        return redirect("warehouse_dashboard")
+
+    product.stock += quantity
+    product.save(update_fields=["stock"])
+
+    WarehouseLog.objects.create(
+        product=product,
+        quantity=quantity,
+        action="in",
+        note="Manual stock update",
+    )
+    return redirect("warehouse_dashboard")
+
+
+@login_required
+def stock_out(request, product_id):
+    product = get_object_or_404(Product, id=product_id)
+    quantity = int(request.POST.get("quantity", 1))
+
+    if quantity <= 0 or quantity > product.stock:
+        return redirect("warehouse_dashboard")
+
+    product.stock -= quantity
+    product.save(update_fields=["stock"])
+
+    WarehouseLog.objects.create(
+        product=product,
+        quantity=quantity,
+        action="out",
+        note="Stock reduced",
+    )
+    return redirect("warehouse_dashboard")
+
+
+@login_required
+def warehouse_dashboard(request):
+    products = Product.objects.all().order_by("stock")
+    logs = WarehouseLog.objects.all().order_by("-created_at")[:10]
+    return render(request, "b2b/warehouse.html", {"products": products, "logs": logs})
+
+
+@login_required
+def ai_assistant(request):
+    top_products = (
+        OrderItem.objects.filter(order__retailer=request.user)
+        .values("product__name_uz")
+        .annotate(total_sold=Sum("quantity"))
+        .order_by("-total_sold")[:10]
+    )
+
+    low_stock_products = Product.objects.filter(stock__lt=10).order_by("stock")[:5]
+    predictions = calculate_restock_predictions(request.user)
+
+    return render(
+        request,
+        "b2b/ai_assistant.html",
+        {
+            "top_products": top_products,
+            "low_stock_products": low_stock_products,
+            "predictions": predictions,
+        },
+    )
+
+
+@login_required
+def notifications(request):
+    user_notifications = Notification.objects.filter(user=request.user).order_by("-created_at")
+    return render(request, "b2b/notifications.html", {"notifications": user_notifications})
+
+
+# =========================================================
+# RESTAURANTS / EDA
+# =========================================================
+def restaurant_list(request):
+    restaurants = Restaurant.objects.all()
+    cart_count = 0
+
+    if request.user.is_authenticated:
+        cart_count = FoodCartItem.objects.filter(cart__user=request.user).count()
+
+    return render(
+        request,
+        "eda/restaurants.html",
+        {
+            "restaurants": restaurants,
+            "cart_count": cart_count,
+        },
+    )
+
+
+def restaurant_detail(request, pk):
+    restaurant = get_object_or_404(Restaurant, id=pk)
+    foods = Food.objects.filter(restaurant=restaurant)
+    return render(
+        request,
+        "eda/restaurant_detail.html",
+        {
+            "restaurant": restaurant,
+            "foods": foods,
+        },
+    )
+
+
+@login_required
+def add_food_to_cart(request, food_id):
+    food = get_object_or_404(Food, id=food_id)
+    cart = _ensure_food_cart(request.user)
+
+    item, created = FoodCartItem.objects.get_or_create(cart=cart, food=food)
+    if not created:
+        item.quantity += 1
+        item.save(update_fields=["quantity"])
+
+    return redirect(request.META.get("HTTP_REFERER", "/eda/restaurants/"))
+
+
+@login_required
+def cart_view_2(request):
+    cart = _ensure_food_cart(request.user)
+    items = FoodCartItem.objects.filter(cart=cart).select_related("food")
+    total = sum(item.food.price * item.quantity for item in items)
+
+    return render(
+        request,
+        "eda/cart.html",
+        {
+            "items": items,
+            "total": total,
+        },
+    )
+
+
+@login_required
+@require_POST
+def update_food_cart(request):
+    item_id = request.POST.get("item_id")
+    action = request.POST.get("action")
+
+    item = get_object_or_404(FoodCartItem, id=item_id, cart__user=request.user)
+
+    if action in ["plus", "inc"]:
+        item.quantity += 1
+        item.save(update_fields=["quantity"])
+    elif action in ["minus", "dec"]:
+        item.quantity -= 1
+        if item.quantity <= 0:
+            item.delete()
+            cart_total = sum(
+                i.food.price * i.quantity
+                for i in FoodCartItem.objects.filter(cart__user=request.user).select_related("food")
+            )
+            return JsonResponse({"deleted": True, "cart_total": int(cart_total)})
+        item.save(update_fields=["quantity"])
+    elif action == "remove":
+        item.delete()
+        cart_total = sum(
+            i.food.price * i.quantity
+            for i in FoodCartItem.objects.filter(cart__user=request.user).select_related("food")
+        )
+        return JsonResponse({"deleted": True, "cart_total": int(cart_total)})
+
+    item_total = item.food.price * item.quantity
+    cart_total = sum(
+        i.food.price * i.quantity
+        for i in FoodCartItem.objects.filter(cart=item.cart).select_related("food")
+    )
+
+    return JsonResponse(
+        {
+            "qty": item.quantity,
+            "item_total": int(item_total),
+            "total": int(cart_total),
+            "cart_total": int(cart_total),
+        }
+    )
+
+
+@login_required
+def food_checkout(request):
+    cart = _ensure_food_cart(request.user)
+    items = FoodCartItem.objects.filter(cart=cart).select_related("food", "food__restaurant")
+
+    if not items.exists():
+        return redirect("/eda/cart/")
+
+    total = sum(item.food.price * item.quantity for item in items)
+
+    if request.method == "POST":
+        customer_phone = request.POST.get("phone", "").strip()
+        customer_name = request.POST.get("name", request.user.username).strip() or request.user.username
+        address = request.POST.get("address", "Toshkent").strip() or "Toshkent"
+        payment_type = request.POST.get("payment_type", "cash")
+
+        if payment_type not in ["cash", "card"]:
+            payment_type = "cash"
+
+        with transaction.atomic():
+            order = FoodOrder.objects.create(
+                restaurant=items.first().food.restaurant,
+                customer_name=customer_name,
+                customer_phone=customer_phone,
+                latitude=41.3,
+                longitude=69.2,
+                status="new",
+                address=address,
+            )
+
+            for item in items:
+                FoodOrderItem.objects.create(order=order, food=item.food, quantity=item.quantity)
+
+            FoodPayment.objects.create(
+                order=order,
+                payment_type=payment_type,
+                is_paid=(payment_type == "cash"),
+            )
+
+            items.delete()
+
+        return redirect(f"/eda/receipt/{order.id}/")
+
+    return render(request, "eda/checkout.html", {"items": items, "total": total})
+
+
+@login_required
+def receipt(request, order_id):
+    order = get_object_or_404(FoodOrder, id=order_id)
+    items = FoodOrderItem.objects.filter(order=order).select_related("food")
+    total = sum(item.food.price * item.quantity for item in items)
+
+    return render(
+        request,
+        "eda/receipt.html",
+        {
+            "order": order,
+            "items": items,
+            "total": total,
+        },
+    )
+
+
+@login_required
+def profile(request):
+    orders = FoodOrder.objects.filter(customer_phone__isnull=False).order_by("-created_at")
+    return render(request, "eda/profile.html", {"orders": orders})
+
+
+# =========================================================
+# COURIER FLOW
+# =========================================================
+@login_required
+def courier_orders(request):
+    orders = FoodOrder.objects.filter(status="new").select_related("restaurant", "courier")
+    return render(request, "eda/courier_orders.html", {"orders": orders})
+
+
+@login_required
+def accept_order(request, order_id):
+    order = get_object_or_404(FoodOrder, id=order_id)
+    order.status = "accepted"
+    order.save(update_fields=["status"])
+    return redirect("/eda/courier/orders/")
+
+
+@login_required
+def courier_order_detail(request, order_id):
+    order = get_object_or_404(FoodOrder, id=order_id)
+    return render(request, "eda/courier_order_detail.html", {"order": order})
+
+
+# =========================================================
+# SUPPLIER / DISTRIBUTOR
+# =========================================================
+@login_required
+def supplier_products(request, supplier_id):
+    if request.user.profile.role != "distributor":
+        return redirect("home")
+
+    products = SupplierProduct.objects.filter(supplier_id=supplier_id)
+    return render(request, "b2b/supplier_products.html", {"products": products})
+
+
+@login_required
+def add_product_to_distributor(request, supplier_product_id):
+    if request.user.profile.role != "distributor":
+        return redirect("home")
+
+    supplier_product = get_object_or_404(SupplierProduct, id=supplier_product_id)
+    DistributorSupplier.objects.get_or_create(
+        distributor=request.user,
+        supplier=supplier_product.supplier,
+    )
+    return redirect("distributor_dashboard")
+
+
+@login_required
+def order_to_supplier(request, supplier_product_id):
+    if request.user.profile.role != "distributor":
+        return redirect("home")
+
+    supplier_product = get_object_or_404(SupplierProduct, id=supplier_product_id)
+
+    SupplierOrder.objects.create(
+        distributor=request.user,
+        supplier=supplier_product.supplier,
+        product=supplier_product.product,
+        quantity=10,
+    )
+
+    return redirect("distributor_dashboard")
+
+
+@login_required
+def supplier_dashboard(request):
+    if request.user.profile.role != "supplier":
+        return redirect("home")
+
+    products = SupplierProduct.objects.filter(supplier=request.user)
+    orders = SupplierOrder.objects.filter(supplier=request.user)
+
+    return render(
+        request,
+        "b2b/supplier_dashboard.html",
+        {
+            "products": products,
+            "orders": orders,
+        },
+    )
+
+
+# =========================================================
+# AUTH
+# =========================================================
+def login_view(request):
+    if request.method == "POST":
+        username = request.POST.get("username")
+        password = request.POST.get("password")
+
+        user = authenticate(request, username=username, password=password)
+        if user:
+            login(request, user)
+            next_url = request.GET.get("next")
+            return redirect(next_url or "home")
+
+    return render(request, "auth/login_register.html")
+
+
+def register_view(request):
+    if request.method == "POST":
+        username = request.POST.get("username")
+        password = request.POST.get("password")
+
+        if username and password and not User.objects.filter(username=username).exists():
+            User.objects.create_user(username=username, password=password)
+            return redirect("login")
+
+    return redirect("login")
+@login_required
+def low_stock(request):
+    products = Product.objects.filter(stock__lt=10).order_by("stock")
+
+    return render(
+        request,
+        "b2b/low_stock.html",
+        {"products": products}
+    )
+signer = Signer()
+
+def telegram_auto_login(request, token):
+    try:
+        telegram_id = signer.unsign(token)
+    except BadSignature:
+        return redirect("login")
+
+    profile = TelegramProfile.objects.filter(telegram_id=telegram_id).first()
+
+    if not profile:
+        return redirect("login")
+
+    login(request, profile.user)
+    return redirect("home")

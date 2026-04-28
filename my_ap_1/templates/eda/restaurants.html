@@ -1,179 +1,151 @@
 {% load static %}
 <!DOCTYPE html>
 <html>
-
 <head>
-
 <meta charset="UTF-8">
-
-<link rel="stylesheet" href="{% static 'css/design.css' %}">
+<title>Baraka Market</title>
 
 <style>
 
 body{
-font-family:Inter,Arial;
-background:linear-gradient(180deg,#f7f9fc,#eef2f7);
-margin:40px;
+font-family:Inter;
+background:linear-gradient(120deg,#fdfbfb,#ebedee);
+margin:0;
+padding:30px;
 }
 
-.title{
-font-size:38px;
+/* TOPBAR */
+.topbar{
+display:flex;
+justify-content:space-between;
+align-items:center;
+margin-bottom:30px;
+}
+
+.logo{
+font-size:24px;
 font-weight:700;
-margin-bottom:20px;
+color:#222;
 }
 
-.search-box input{
+/* BUTTON */
+.btn{
+background:#ff7a00;
+color:white;
+padding:10px 16px;
+border-radius:12px;
+text-decoration:none;
+font-weight:600;
+margin-left:10px;
+box-shadow:0 4px 10px rgba(0,0,0,0.1);
+}
+
+/* SEARCH */
+.search{
 width:100%;
-padding:16px;
+padding:14px;
 border-radius:14px;
 border:none;
-box-shadow:0 6px 20px rgba(0,0,0,0.08);
+box-shadow:0 8px 20px rgba(0,0,0,0.08);
+margin-bottom:30px;
 font-size:16px;
-margin-bottom:40px;
 }
 
-.restaurant-grid{
+/* GRID */
+.grid{
 display:grid;
-grid-template-columns:repeat(auto-fill,minmax(300px,1fr));
-gap:28px;
+grid-template-columns:repeat(auto-fill,minmax(280px,1fr));
+gap:25px;
 }
 
-.restaurant-card{
+/* CARD */
+.card{
 background:white;
-border-radius:18px;
+border-radius:20px;
 overflow:hidden;
-box-shadow:0 12px 30px rgba(0,0,0,0.08);
+box-shadow:0 15px 40px rgba(0,0,0,0.1);
 transition:0.3s;
-cursor:pointer;
+text-decoration:none;
+color:#222;
 }
 
-.restaurant-card:hover{
-transform:translateY(-8px);
-box-shadow:0 25px 50px rgba(0,0,0,0.15);
+.card:hover{
+transform:translateY(-6px) scale(1.02);
 }
 
-.restaurant-card img{
+.card img{
 width:100%;
-height:200px;
+height:170px;
 object-fit:cover;
 }
 
-.restaurant-info{
-padding:20px;
+.card-body{
+padding:18px;
 }
 
-.restaurant-info h3{
+.card-body h3{
 margin:0;
 font-size:20px;
 }
 
-.meta{
+.card-body p{
+color:#555;
 margin-top:6px;
-color:#666;
 font-size:14px;
 }
 
 </style>
-
 </head>
 
 <body>
-<div style="display:flex;justify-content:space-between;margin-bottom:40px">
 
-<h1>Baraka Market</h1>
+<!-- HEADER -->
+<div class="topbar">
+<div class="logo">🍔 Baraka Market</div>
 
 <div>
-
-<button class="btn">🛒 Savatcha</button>
-<button class="btn">👤 Profil</button>
-
+<a href="/eda/cart/" class="btn">🛒</a>
+<a href="/eda/profile/" class="btn">👤</a>
+</div>
 </div>
 
-</div>
+<!-- SEARCH -->
+<input id="search" class="search" placeholder="Restoran qidirish...">
 
-<div class="title">🍔 Restoranlar</div>
+<!-- GRID -->
+<div class="grid" id="list">
 
-<div class="search-box">
-<input type="text" id="searchInput" placeholder="Restoran qidirish...">
-</div>
+{% for restaurant in restaurants %}
 
-<div style="display:flex;gap:15px;overflow-x:auto;margin-bottom:25px">
+<a href="{% url 'restaurant_detail' restaurant.id %}" class="card">
 
-<div class="card">🍔 Burger</div>
-<div class="card">🍕 Pizza</div>
-<div class="card">🥙 Lavash</div>
-<div class="card">🍣 Sushi</div>
-<div class="card">🥗 Salat</div>
+<img src="{{ restaurant.image.url }}">
 
-</div>
-
-<div class="restaurant-grid">
-
-{% for r in restaurants %}
-
-<a href="/eda/restaurant/{{ r.id }}/" style="text-decoration:none;color:black">
-
-<div class="restaurant-card">
-
-<img src="{{ r.image.url }}">
-
-<div class="restaurant-info">
-
-<h3>{{ r.name }}</h3>
-
-<div class="meta">
-⭐ {{ r.rating }} • 🚴 20-30 min
-</div>
-
-</div>
-
+<div class="card-body">
+<h3>{{ restaurant.name }}</h3>
+<p>{{ restaurant.description|truncatechars:60 }}</p>
 </div>
 
 </a>
 
+{% empty %}
+<p>❌ Hozircha restoran yo‘q</p>
 {% endfor %}
 
 </div>
 
-
 <script>
 
-let input=document.getElementById("searchInput")
+// 🔥 SEARCH
+document.getElementById("search").addEventListener("input", function(){
+let val = this.value.toLowerCase();
 
-input.addEventListener("keyup",function(){
+document.querySelectorAll(".card").forEach(card=>{
+card.style.display = card.innerText.toLowerCase().includes(val)
+? "block" : "none";
+});
 
-let filter=input.value.toLowerCase()
-
-let cards=document.querySelectorAll(".restaurant-card")
-
-cards.forEach(card=>{
-
-let name=card.innerText.toLowerCase()
-
-card.style.display=name.includes(filter)?"block":"none"
-
-})
-
-})
-
-function distance(lat1,lon1,lat2,lon2){
-
-const R=6371
-
-let dLat=(lat2-lat1)*Math.PI/180
-let dLon=(lon2-lon1)*Math.PI/180
-
-let a=
-Math.sin(dLat/2)*Math.sin(dLat/2)+
-Math.cos(lat1*Math.PI/180)*
-Math.cos(lat2*Math.PI/180)*
-Math.sin(dLon/2)*Math.sin(dLon/2)
-
-let c=2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a))
-
-return (R*c).toFixed(2)
-
-}
+});
 
 </script>
 

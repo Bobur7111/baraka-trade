@@ -2,7 +2,10 @@ from django.contrib import admin
 from .models import *
 from django.contrib import admin
 from .models import WarehouseLog
-
+from .models import SupplierProduct, DistributorSupplier, SupplierOrder
+admin.site.register(SupplierProduct)
+admin.site.register(DistributorSupplier)
+admin.site.register(SupplierOrder)
 admin.site.register(WarehouseLog)
 class OrderItemInline(admin.TabularInline):
     model = OrderItem

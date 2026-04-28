@@ -1,5 +1,4 @@
 {% load static %}
-
 <!DOCTYPE html>
 
 <html lang="uz">
@@ -66,19 +65,19 @@ animation:edaGlow 2s infinite;
 
 <body class="bg-black flex flex-col min-h-screen">
 
-<canvas id="backgroundCanvas"></canvas>
+<!--<canvas id="backgroundCanvas"></canvas>-->
 
 <header class="bg-green-600 text-white shadow-md relative z-10">
 
 <div class="container mx-auto flex justify-between items-center py-4 px-6">
 
-<a href="/" class="text-2xl font-bold tracking-wide">
+<a href="{% url 'home' %}" class="text-2xl font-bold tracking-wide">
 🛒 Baraka Market
 </a>
 
 <nav class="flex items-center space-x-4">
 
-<a href="/" class="hover:text-yellow-300 transition">
+<a href="{% url 'home' %}" class="hover:text-yellow-300 transition">
 Bosh sahifa
 </a>
 
@@ -143,57 +142,7 @@ class="bg-green-700 text-white px-2 py-1 rounded cursor-pointer focus:outline-no
 
 {% block extra_js %}
 
-<script src="{% static 'js/voice.js' %}"></script>
 
-<script>
-
-const canvas=document.getElementById('backgroundCanvas');
-const ctx=canvas.getContext('2d');
-
-function resizeCanvas(){
-canvas.width=window.innerWidth;
-canvas.height=window.innerHeight;
-}
-resizeCanvas();
-window.addEventListener("resize",resizeCanvas);
-
-let drops=[];
-for(let i=0;i<200;i++){
-drops.push({
-x:Math.random()*canvas.width,
-y:Math.random()*canvas.height,
-length:10+Math.random()*20,
-speed:4+Math.random()*4
-});
-}
-
-function draw(){
-
-ctx.clearRect(0,0,canvas.width,canvas.height);
-ctx.strokeStyle="white";
-ctx.lineWidth=1;
-
-drops.forEach(drop=>{
-
-ctx.beginPath();
-ctx.moveTo(drop.x,drop.y);
-ctx.lineTo(drop.x,drop.y+drop.length);
-ctx.stroke();
-
-drop.y+=drop.speed;
-
-if(drop.y>canvas.height){
-drop.y=-drop.length;
-}
-
-});
-
-requestAnimationFrame(draw);
-}
-
-draw();
-
-</script>
 
 {% endblock %}
 

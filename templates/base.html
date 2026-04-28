@@ -34,7 +34,7 @@
 <body class="bg-black flex flex-col min-h-screen">
 
     <!-- Canvas -->
-    <canvas id="backgroundCanvas"></canvas>
+
 
     <!-- Navbar -->
     <header class="bg-green-600 text-white shadow-md relative z-20">
@@ -91,48 +91,48 @@
 
     {% block extra_js %}{% endblock %}
 
-    <!-- 🌧 Canvas rain -->
-    <script>
-        const canvas = document.getElementById("backgroundCanvas");
-        const ctx = canvas.getContext("2d");
+<!--    &lt;!&ndash; 🌧 Canvas rain &ndash;&gt;-->
+<!--    <script>-->
+<!--        const canvas = document.getElementById("backgroundCanvas");-->
+<!--        const ctx = canvas.getContext("2d");-->
 
-        function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-        }
-        resizeCanvas();
+<!--        function resizeCanvas() {-->
+<!--            canvas.width = window.innerWidth;-->
+<!--            canvas.height = window.innerHeight;-->
+<!--        }-->
+<!--        resizeCanvas();-->
 
-        let drops = [];
-        for (let i = 0; i < 200; i++) {
-            drops.push({
-                x: Math.random() * canvas.width,
-                y: Math.random() * canvas.height,
-                length: 10 + Math.random() * 20,
-                speed: 4 + Math.random() * 4
-            });
-        }
+<!--        let drops = [];-->
+<!--        for (let i = 0; i < 200; i++) {-->
+<!--            drops.push({-->
+<!--                x: Math.random() * canvas.width,-->
+<!--                y: Math.random() * canvas.height,-->
+<!--                length: 10 + Math.random() * 20,-->
+<!--                speed: 4 + Math.random() * 4-->
+<!--            });-->
+<!--        }-->
 
-        function drawRain() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.strokeStyle = "white";
-            ctx.lineWidth = 1;
+<!--        function drawRain() {-->
+<!--            ctx.clearRect(0, 0, canvas.width, canvas.height);-->
+<!--            ctx.strokeStyle = "white";-->
+<!--            ctx.lineWidth = 1;-->
 
-            drops.forEach(d => {
-                ctx.beginPath();
-                ctx.moveTo(d.x, d.y);
-                ctx.lineTo(d.x, d.y + d.length);
-                ctx.stroke();
+<!--            drops.forEach(d => {-->
+<!--                ctx.beginPath();-->
+<!--                ctx.moveTo(d.x, d.y);-->
+<!--                ctx.lineTo(d.x, d.y + d.length);-->
+<!--                ctx.stroke();-->
 
-                d.y += d.speed;
-                if (d.y > canvas.height) d.y = -d.length;
-            });
+<!--                d.y += d.speed;-->
+<!--                if (d.y > canvas.height) d.y = -d.length;-->
+<!--            });-->
 
-            requestAnimationFrame(drawRain);
-        }
-        drawRain();
+<!--            requestAnimationFrame(drawRain);-->
+<!--        }-->
+<!--        drawRain();-->
 
-        window.addEventListener("resize", resizeCanvas);
-    </script>
+<!--        window.addEventListener("resize", resizeCanvas);-->
+<!--    </script>-->
 
     <!-- 🌐 Language dropdown -->
     <script>

@@ -8,83 +8,59 @@
 🤖 AI Biznes Assistent
 </h1>
 
-
 <!-- TOP PRODUCTS -->
-
-<div class="bg-white text-black p-6 rounded-xl mb-8">
+<div class="bg-white !text-black p-6 rounded-xl mb-8">
 
 <h2 class="text-xl font-bold mb-4">
 🔥 Eng ko‘p sotilgan mahsulotlar (7 kun)
 </h2>
 
 <ul>
-
 {% for p in top_products %}
-
-<li>
-{{ p.product__name_uz }} — {{ p.total }} dona
-</li>
-
+<li>{{ p.product.name_uz }} — {{ p.total }} dona</li>
+{% empty %}
+<p class="text-gray-500">Ma’lumot yo‘q</p>
 {% endfor %}
-
 </ul>
 
 </div>
 
-
 <!-- LOW STOCK -->
-
-<div class="bg-white text-black p-6 rounded-xl mb-8">
+<div class="bg-white !text-black p-6 rounded-xl mb-8">
 
 <h2 class="text-xl font-bold mb-4">
 📉 Kam qolgan mahsulotlar
 </h2>
 
 <ul>
-
 {% for p in low_stock_products %}
-
-<li>
-{{ p.name_uz }} — stock: {{ p.stock }}
-</li>
-
+<li>{{ p.name_uz }} — stock: {{ p.stock }}</li>
+{% empty %}
+<p class="text-gray-500">Hammasi yetarli</p>
 {% endfor %}
-
 </ul>
 
 </div>
 
-
 <!-- AI PREDICTIONS -->
-
-<div class="bg-white text-black p-6 rounded-xl">
+<div class="bg-white !text-black p-6 rounded-xl">
 
 <h2 class="text-xl font-bold mb-4">
 🤖 AI Restock Tavsiyasi
 </h2>
 
 <ul>
-
 {% for item in predictions %}
-
-<li>
-
-📦 {{ item.product.name_uz }}
-
-kunlik sotuv: {{ item.daily_avg }}
-
+<li class="mb-3">
+📦 <b>{{ item.product.name_uz }}</b><br>
+kunlik sotuv: {{ item.daily_avg }}<br>
 tavsiya: {{ item.recommended }} dona
-
 </li>
-
 {% empty %}
-
-<p>
+<p class="text-gray-500">
 AI hozircha tavsiya bermayapti
 </p>
-
 {% endfor %}
-
 </ul>
 
 </div>

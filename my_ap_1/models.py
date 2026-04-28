@@ -4,11 +4,6 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 import random
 
-
-# =========================
-# CATEGORY
-# =========================
-
 class Category(models.Model):
     name_uz = models.CharField(max_length=255)
     name_en = models.CharField(max_length=255, blank=True, null=True)
@@ -21,11 +16,9 @@ class Category(models.Model):
         return getattr(self, f"name_{lang}", None) or self.name_uz
 
 
-# =========================
-# PRODUCT
-# =========================
 
 class Product(models.Model):
+    seller = models.ForeignKey(User, on_delete=models.CASCADE)
 
     name_uz = models.CharField(max_length=255)
     name_en = models.CharField(max_length=255, blank=True, null=True)
@@ -37,26 +30,32 @@ class Product(models.Model):
 
     price = models.DecimalField(max_digits=10, decimal_places=2)
     stock = models.IntegerField(default=0)
-
     image = models.ImageField(upload_to="products/", blank=True, null=True)
 
-    category = models.ForeignKey(
-        Category,
-        on_delete=models.CASCADE,
-        null=True,
-        blank=True
-    )
+    category = models.ForeignKey(Category, on_delete=models.CASCADE, null=True, blank=True)
 
     def __str__(self):
         return self.name_uz
 
-    def get_name(self, lang="uz"):
-        return getattr(self, f"name_{lang}", None) or self.name_uz
+    # 🔵 NAME TRANSLATION
+    def get_name(self, lang):
+        if lang == "uz":
+            return self.name_uz
+        elif lang == "ru":
+            return self.name_ru or self.name_uz
+        elif lang == "en":
+            return self.name_en or self.name_uz
+        return self.name_uz
 
-    def get_description(self, lang="uz"):
-        return getattr(self, f"description_{lang}", None) or self.description_uz
-
-
+    # 🔵 DESCRIPTION TRANSLATION
+    def get_description(self, lang):
+        if lang == "uz":
+            return self.description_uz
+        elif lang == "ru":
+            return self.description_ru or self.description_uz
+        elif lang == "en":
+            return self.description_en or self.description_uz
+        return self.description_uz
 # =========================
 # CART
 # =========================
@@ -103,6 +102,7 @@ class Profile(models.Model):
     ROLE_CHOICES = (
         ('retailer', 'Retailer'),
         ('distributor', 'Distributor'),
+        ('supplier', 'Supplier'),
     )
 
     user = models.OneToOneField(User, on_delete=models.CASCADE)
@@ -210,9 +210,15 @@ class Order(models.Model):
         ("paid", "Paid"),
     )
 
-    retailer = models.ForeignKey(User, on_delete=models.CASCADE)
+    retailer = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE
+    )
 
-    total_price = models.DecimalField(max_digits=10, decimal_places=2)
+    total_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2
+    )
 
     order_type = models.CharField(
         max_length=10,
@@ -226,7 +232,9 @@ class Order(models.Model):
         default="pending"
     )
 
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(
+        auto_now_add=True
+    )
 
     def __str__(self):
         return f"Order {self.id} - {self.retailer}"
@@ -400,9 +408,12 @@ class FoodOrder(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # 🔥 YANGI QO‘SHAMIZ
+    estimated_time = models.IntegerField(default=25)  # minut
+    address = models.CharField(max_length=255, default="Toshkent")
+
     def __str__(self):
         return f"FoodOrder {self.code}"
-
 
 class FoodOrderItem(models.Model):
 
@@ -427,3 +438,86 @@ class PaymentOTP(models.Model):
 
     def __str__(self):
         return f"{self.phone} - {self.code}"
+class FoodCart(models.Model):
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+
+    def __str__(self):
+        return f"{self.user} cart"
+class FoodCartItem(models.Model):
+    cart = models.ForeignKey(FoodCart, on_delete=models.CASCADE)
+    food = models.ForeignKey(Food, on_delete=models.CASCADE)
+
+    quantity = models.PositiveIntegerField(default=1)
+
+    def __str__(self):
+        return f"{self.food.name} x {self.quantity}"
+
+    def total_price(self):
+        return self.food.price * self.quantity
+class FoodPayment(models.Model):
+    order = models.OneToOneField(FoodOrder, on_delete=models.CASCADE)
+
+    PAYMENT_TYPES = (
+        ("cash", "Naqt"),
+        ("card", "Karta"),
+    )
+
+    payment_type = models.CharField(max_length=10, choices=PAYMENT_TYPES)
+
+    is_paid = models.BooleanField(default=False)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+class FoodPaymentOTP(models.Model):
+    phone = models.CharField(max_length=20)
+    code = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True, null=True)
+class SupplierProduct(models.Model):
+    supplier = models.ForeignKey(User, on_delete=models.CASCADE)
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+
+    price = models.DecimalField(max_digits=10, decimal_places=2)
+    stock = models.IntegerField()
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.product.name_uz} ({self.supplier.username})"
+class DistributorSupplier(models.Model):
+
+    distributor = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="my_suppliers"
+    )
+
+    supplier = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="my_distributors"
+    )
+class SupplierOrder(models.Model):
+
+    distributor = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="supplier_orders_made"
+    )
+
+    supplier = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name="supplier_orders_received"
+    )
+
+    product = models.ForeignKey(Product, on_delete=models.CASCADE)
+    quantity = models.IntegerField()
+
+    status = models.CharField(max_length=20, default="pending")
+class TelegramProfile(models.Model):
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    telegram_id = models.BigIntegerField(unique=True)
+    phone = models.CharField(max_length=20, blank=True, null=True)
+    full_name = models.CharField(max_length=150, blank=True, null=True)
+
+    def __str__(self):
+        return self.full_name or str(self.telegram_id)

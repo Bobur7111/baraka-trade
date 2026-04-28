@@ -1,145 +1,88 @@
-{% load static %}
-
-<link rel="stylesheet" href="{% static 'css/design.css' %}">
 <!DOCTYPE html>
 <html>
 <head>
-
 <meta charset="UTF-8">
 
 <style>
 
 body{
 font-family:Inter;
-background:#f7f9fc;
-margin:40px;
+background:#0f172a;
+color:white;
+padding:30px;
 }
 
-.header{
-display:flex;
-gap:30px;
-align-items:center;
-margin-bottom:40px;
-}
-
-.header img{
-width:260px;
-border-radius:18px;
-box-shadow:0 12px 35px rgba(0,0,0,0.12);
-}
-
-.header h1{
-margin:0;
-font-size:34px;
-}
-
-.menu-grid{
+/* GRID */
+.menu{
 display:grid;
 grid-template-columns:repeat(auto-fill,minmax(250px,1fr));
-gap:25px;
+gap:20px;
 }
 
-.food-card{
-background:white;
+/* CARD */
+.food{
+background:rgba(255,255,255,0.05);
+padding:15px;
 border-radius:16px;
-overflow:hidden;
-box-shadow:0 10px 25px rgba(0,0,0,0.08);
 transition:0.3s;
 }
 
-.food-card:hover{
-transform:translateY(-6px);
-box-shadow:0 20px 40px rgba(0,0,0,0.15);
+.food:hover{
+transform:translateY(-5px);
 }
 
-.food-card img{
+.food img{
 width:100%;
-height:170px;
+height:150px;
 object-fit:cover;
+border-radius:10px;
 }
 
-.food-body{
-padding:16px;
-}
-
-.price{
-font-weight:700;
-color:#00a86b;
-margin:8px 0;
-}
-
-.order-btn{
+.btn{
+margin-top:10px;
+padding:10px;
 width:100%;
-padding:12px;
 border:none;
 border-radius:10px;
-background:linear-gradient(45deg,#ff7b00,#ffae00);
-color:white;
-font-weight:600;
 cursor:pointer;
-transition:0.3s;
 }
 
-.order-btn:hover{
-transform:scale(1.04);
+.add{
+background:#ff7a00;
+}
+
+.order{
+background:#22c55e;
 }
 
 </style>
-
 </head>
 
 <body>
-<div style="display:flex;justify-content:space-between;margin-bottom:40px">
-
-<h1>Baraka Market</h1>
-
-<div>
-
-<button class="btn">🛒 Savatcha</button>
-<button class="btn">👤 Profil</button>
-
-</div>
-
-</div>
-
-<div class="header">
-
-<img src="{{ restaurant.image.url }}">
-
-<div>
 
 <h1>{{ restaurant.name }}</h1>
 
-<p>{{ restaurant.description }}</p>
-
-</div>
-
-</div>
-
-<h2>Menu</h2>
-
-<div class="menu-grid">
+<div class="menu">
 
 {% for food in foods %}
-
-<div class="food-card">
+<div class="food">
 
 <img src="{{ food.image.url }}">
 
-<div class="food-body">
-
 <h3>{{ food.name }}</h3>
+<p>{{ food.price }} so'm</p>
 
-<div class="price">{{ food.price }} so'm</div>
+<a href="{% url 'add_food_to_cart' food.id %}">
+<button class="btn add">Qo‘shish</button>
+</a>
 
-<a href="/eda/order/{{ food.id }}/">
-<button class="order-btn">Buyurtma berish</button>
+<form action="{% url 'add_food_to_cart' food.id %}" method="get">
+    <button type="submit">Savatga qo‘shish</button>
+</form>
+<button class="btn order">Buyurtmalarga qaytish</button>
 </a>
 
 </div>
-
-</div>
-
 {% endfor %}
 
 </div>

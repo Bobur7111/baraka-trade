@@ -1,0 +1,135 @@
+{% extends "base.html" %}
+{% block content %}
+
+<div class="p-10">
+
+    <h1 class="text-3xl font-bold mb-8 text-white">
+        🛒 B2C Savdo Paneli
+    </h1>
+
+    <!-- STATS -->
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 mb-10">
+
+        <div class="bg-white text-gray-900 p-6 rounded-xl shadow">
+            <h3 class="text-gray-500">
+                Bugungi Savdo
+            </h3>
+
+            <p class="text-2xl font-bold text-green-600">
+                {{ today_sales }} so'm
+            </p>
+        </div>
+
+        <div class="bg-white text-gray-900 p-6 rounded-xl shadow">
+            <h3 class="text-gray-500">
+                Bugungi Buyurtmalar
+            </h3>
+
+            <p class="text-2xl font-bold text-blue-600">
+                {{ today_orders_count }} ta
+            </p>
+        </div>
+
+        <div class="bg-white text-gray-900 p-6 rounded-xl shadow">
+            <h3 class="text-gray-500">
+                Yangi mijozlar
+            </h3>
+
+            <p class="text-2xl font-bold text-purple-600">
+                0
+            </p>
+        </div>
+
+    </div>
+
+    <!-- TOP PRODUCTS -->
+    <div class="bg-white text-gray-900 p-6 rounded-xl shadow mb-10">
+
+        <h2 class="text-xl font-bold mb-4">
+            🏆 Eng ko‘p sotilgan mahsulotlar
+        </h2>
+
+        <ul class="space-y-3">
+            {% for product in top_products %}
+            <li class="flex justify-between items-center border-b pb-2">
+                <div class="font-medium text-gray-700">
+                    {{ product.product__name_uz }}
+                </div>
+
+                <div class="font-bold text-indigo-600">
+                    {{ product.total_sold }} ta
+                </div>
+            </li>
+            {% empty %}
+            <li class="text-gray-500">
+                Hozircha sotuv yo‘q
+            </li>
+            {% endfor %}
+        </ul>
+
+    </div>
+
+    <!-- LOW STOCK -->
+    <div class="bg-white text-gray-900 p-6 rounded-xl shadow">
+
+        <h2 class="text-xl font-bold mb-4">
+            ⚠ Kam qolgan mahsulotlar
+        </h2>
+
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr class="border-b text-gray-700">
+                    <th class="py-2">Mahsulot</th>
+                    <th class="py-2">Stock</th>
+                    <th class="py-2">Status</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for product in low_stock_products %}
+                <tr class="border-b">
+                    <td class="py-3">
+                        {{ product.name_uz }}
+
+                        <div class="w-full bg-gray-200 rounded-full h-2 mt-2">
+                            <div class="bg-green-600 h-2 rounded-full"
+                                 style="width: {% if product.stock > 100 %}100{% elif product.stock < 0 %}0{% else %}{{ product.stock|floatformat:0 }}{% endif %}%">
+                            </div>
+                        </div>
+                    </td>
+
+                    <td class="py-3">
+                        {{ product.stock }}
+                    </td>
+
+                    <td class="py-3">
+                        {% if product.stock < 3 %}
+                        <span class="text-red-600 font-bold">
+                            Kritik
+                        </span>
+                        {% elif product.stock <= 7 %}
+                        <span class="text-yellow-500 font-semibold">
+                            Kam
+                        </span>
+                        {% else %}
+                        <span class="text-green-600 font-semibold">
+                            Yetarli
+                        </span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="3" class="text-center py-4 text-gray-500">
+                        Stock yetarli
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+
+    </div>
+
+</div>
+
+{% endblock %}
