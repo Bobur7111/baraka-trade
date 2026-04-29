@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+
+{% block title %}Product Edit | Baraka Market{% endblock %}
+
+{% block content %}
+
+<div class="max-w-3xl mx-auto bg-white rounded-3xl shadow-xl p-6">
+
+    <h1 class="text-3xl font-bold text-gray-800 mb-6">
+        ✏️ Mahsulotni tahrirlash
+    </h1>
+
+    <form method="post" enctype="multipart/form-data" class="space-y-4">
+        {% csrf_token %}
+
+        <input type="text" name="name_uz" value="{{ product.name_uz }}"
+               placeholder="Nomi UZ"
+               class="w-full border rounded-2xl px-4 py-3 text-gray-800">
+
+        <input type="text" name="name_en" value="{{ product.name_en }}"
+               placeholder="Name EN"
+               class="w-full border rounded-2xl px-4 py-3 text-gray-800">
+
+        <input type="text" name="name_ru" value="{{ product.name_ru }}"
+               placeholder="Название RU"
+               class="w-full border rounded-2xl px-4 py-3 text-gray-800">
+
+        <textarea name="description_uz" placeholder="Description UZ"
+                  class="w-full border rounded-2xl px-4 py-3 text-gray-800 min-h-28">{{ product.description_uz }}</textarea>
+
+        <textarea name="description_en" placeholder="Description EN"
+                  class="w-full border rounded-2xl px-4 py-3 text-gray-800 min-h-28">{{ product.description_en }}</textarea>
+
+        <textarea name="description_ru" placeholder="Description RU"
+                  class="w-full border rounded-2xl px-4 py-3 text-gray-800 min-h-28">{{ product.description_ru }}</textarea>
+
+        <input type="number" name="price" value="{{ product.price }}"
+               placeholder="Narxi"
+               class="w-full border rounded-2xl px-4 py-3 text-gray-800">
+
+        <input type="number" name="stock" value="{{ product.stock }}"
+               placeholder="Stock"
+               class="w-full border rounded-2xl px-4 py-3 text-gray-800">
+
+        <select name="category" class="w-full border rounded-2xl px-4 py-3 text-gray-800">
+            {% for cat in categories %}
+                <option value="{{ cat.id }}" {% if product.category.id == cat.id %}selected{% endif %}>
+                    {{ cat.name_uz }}
+                </option>
+            {% endfor %}
+        </select>
+
+        {% if product.image %}
+            <img src="{{ product.image.url }}" class="w-40 h-40 object-cover rounded-2xl">
+        {% endif %}
+
+        <input type="file" name="image"
+               class="w-full border rounded-2xl px-4 py-3 text-gray-800">
+
+        <div class="flex gap-3">
+            <button type="submit"
+                    class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-2xl font-bold">
+                Saqlash
+            </button>
+
+            <a href="{% url 'my_products' %}"
+               class="bg-gray-700 hover:bg-gray-800 text-white px-6 py-3 rounded-2xl font-bold">
+                Bekor qilish
+            </a>
+        </div>
+    </form>
+
+</div>
+
+{% endblock %}

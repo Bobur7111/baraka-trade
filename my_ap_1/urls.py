@@ -48,6 +48,7 @@ urlpatterns = [
     # =========================
     # B2B
     # =========================
+    path('b2b/', views.b2b_entry, name='b2b_entry'),
     path('b2b/dashboard/', views.b2b_dashboard, name='b2b_dashboard'),
     path('b2b/create/<int:product_id>/', views.create_b2b_request, name='create_b2b'),
     path('b2b/request/<int:product_id>/', views.create_supply_request, name='create_supply_request'),
@@ -59,9 +60,15 @@ urlpatterns = [
     path('b2b/stock-in/<int:product_id>/', views.stock_in, name='stock_in'),
     path('b2b/stock-out/<int:product_id>/', views.stock_out, name='stock_out'),
     path('b2b/ai-assistant/', views.ai_assistant, name='ai_assistant'),
+    path('profile/', views.profile_view, name='profile_view'),
 
     path('notifications/', views.notifications, name='notifications'),
-
+    path('my-products/', views.my_products, name='my_products'),
+    path('add-product/', views.add_product, name='add_product'),
+    path('my-products/edit/<int:product_id>/', views.edit_product, name='edit_product'),
+    path('my-products/delete/<int:product_id>/', views.delete_product, name='delete_product'),
+    path('api/online-users/', views.online_users_count, name='online_users_count'),
+    path('api/unread-notifications/', views.unread_notifications_count, name='unread_notifications_count'),
     # =========================
     # SUPPLIER / DISTRIBUTOR
     # =========================

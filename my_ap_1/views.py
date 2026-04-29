@@ -2,12 +2,16 @@ import json
 import random
 import re
 from datetime import timedelta
+from django.utils import timezone
+from django.contrib.auth.models import User
+from datetime import timedelta
 from django.contrib.auth import login
 from django.contrib.auth.models import User
 from django.shortcuts import redirect
 from django.core.signing import Signer, BadSignature
 from .models import TelegramProfile
 import torch
+from django.contrib import messages
 from PIL import Image
 from django.contrib.auth import authenticate, login
 from django.contrib.auth.decorators import login_required
@@ -200,10 +204,13 @@ def landing(request):
 def home_view(request):
     if request.user.is_authenticated:
         profile = getattr(request.user, "profile", None)
+
         if profile and profile.role:
             role = profile.role.lower()
+
             if role == "supplier":
                 return redirect("supplier_dashboard")
+
             if role == "distributor":
                 return redirect("distributor_dashboard")
 
@@ -240,8 +247,6 @@ def home_view(request):
             "selected_category_id": category_id,
         },
     )
-
-
 def category_products(request, category_id):
     category = get_object_or_404(Category, id=category_id)
     products = Product.objects.filter(category=category)
@@ -654,6 +659,27 @@ def b2c_dashboard(request):
 # =========================================================
 # B2B
 # =========================================================
+def b2b_entry(request):
+    if not request.user.is_authenticated:
+        return redirect("login")
+
+    profile = getattr(request.user, "profile", None)
+
+    if not profile or not profile.role:
+        return redirect("home")
+
+    role = profile.role.lower()
+
+    if role == "retailer":
+        return redirect("b2b_dashboard")
+
+    if role == "distributor":
+        return redirect("distributor_dashboard")
+
+    if role == "supplier":
+        return redirect("supplier_dashboard")
+
+    return redirect("home")
 @login_required
 def create_b2b_request(request, product_id):
     product = get_object_or_404(Product, id=product_id)
@@ -682,7 +708,9 @@ def distributor_dashboard(request):
     if request.user.profile.role != "distributor":
         return redirect("home")
 
-    requests = SupplyRequest.objects.all().order_by("-id")
+    requests = SupplyRequest.objects.filter(
+        product__seller=request.user
+    ).order_by("-id")
     suppliers = DistributorSupplier.objects.filter(distributor=request.user)
 
     return render(
@@ -724,7 +752,10 @@ def b2b_dashboard(request):
 
     total_sales = b2b_orders_qs.aggregate(total=Sum("total_price"))["total"] or 0
 
-    low_stock_products = Product.objects.filter(stock__lte=7).order_by("stock")
+    low_stock_products = Product.objects.filter(
+        seller=request.user,
+        stock__lte=7
+    )
     low_stock_count = low_stock_products.count()
 
     requests_count = SupplyRequest.objects.filter(retailer=request.user).count()
@@ -771,7 +802,8 @@ def sales_analytics(request):
         sales_data.append(float(total))
 
     top_products = (
-        OrderItem.objects.values("product__name_uz")
+        OrderItem.objects.filter(order__retailer=request.user)
+        .values("product__name_uz")
         .annotate(total_sold=Sum("quantity"))
         .order_by("-total_sold")[:10]
     )
@@ -829,8 +861,11 @@ def stock_out(request, product_id):
 
 @login_required
 def warehouse_dashboard(request):
-    products = Product.objects.all().order_by("stock")
-    logs = WarehouseLog.objects.all().order_by("-created_at")[:10]
+    products = Product.objects.filter(seller=request.user).order_by("stock")
+
+    logs = WarehouseLog.objects.filter(
+        product__seller=request.user
+    ).order_by("-created_at")[:10]
     return render(request, "b2b/warehouse.html", {"products": products, "logs": logs})
 
 
@@ -843,7 +878,10 @@ def ai_assistant(request):
         .order_by("-total_sold")[:10]
     )
 
-    low_stock_products = Product.objects.filter(stock__lt=10).order_by("stock")[:5]
+    low_stock_products = Product.objects.filter(
+        seller=request.user,
+        stock__lt=10
+    )
     predictions = calculate_restock_predictions(request.user)
 
     return render(
@@ -859,9 +897,19 @@ def ai_assistant(request):
 
 @login_required
 def notifications(request):
-    user_notifications = Notification.objects.filter(user=request.user).order_by("-created_at")
-    return render(request, "b2b/notifications.html", {"notifications": user_notifications})
+    user_notifications = Notification.objects.filter(
+        user=request.user
+    ).order_by("-created_at")
 
+    user_notifications.filter(is_read=False).update(is_read=True)
+
+    return render(
+        request,
+        "b2b/notifications.html",
+        {
+            "notifications": user_notifications
+        }
+    )
 
 # =========================================================
 # RESTAURANTS / EDA
@@ -1141,12 +1189,37 @@ def login_view(request):
 
 def register_view(request):
     if request.method == "POST":
-        username = request.POST.get("username")
-        password = request.POST.get("password")
+        username = request.POST.get("username", "").strip()
+        first_name = request.POST.get("first_name", "").strip()
+        last_name = request.POST.get("last_name", "").strip()
+        phone = request.POST.get("phone", "").strip()
+        address = request.POST.get("address", "").strip()
+        role = request.POST.get("role", "customer").strip()
+        password = request.POST.get("password", "").strip()
 
-        if username and password and not User.objects.filter(username=username).exists():
-            User.objects.create_user(username=username, password=password)
+        if not username or not password:
+            messages.error(request, "Username va parol kiritilishi shart.")
             return redirect("login")
+
+        if User.objects.filter(username=username).exists():
+            messages.error(request, "Bu username oldin ro‘yxatdan o‘tgan.")
+            return redirect("login")
+
+        user = User.objects.create_user(
+            username=username,
+            password=password,
+            first_name=first_name,
+            last_name=last_name,
+        )
+
+        profile = user.profile
+        profile.phone = phone
+        profile.address = address
+        profile.role = role if role in ["customer", "retailer", "distributor", "supplier"] else "customer"
+        profile.save()
+
+        login(request, user)
+        return redirect("home")
 
     return redirect("login")
 @login_required
@@ -1173,3 +1246,116 @@ def telegram_auto_login(request, token):
 
     login(request, profile.user)
     return redirect("home")
+@login_required
+def profile_view(request):
+    profile = request.user.profile
+
+    if request.method == "POST":
+        request.user.first_name = request.POST.get("first_name", "").strip()
+        request.user.last_name = request.POST.get("last_name", "").strip()
+        request.user.save()
+
+        profile.phone = request.POST.get("phone", "").strip()
+        profile.address = request.POST.get("address", "").strip()
+
+        if request.FILES.get("image"):
+            profile.image = request.FILES.get("image")
+
+        profile.save()
+        return redirect("profile_view")
+
+    return render(request, "profile.html", {"profile": profile})
+@login_required
+def my_products(request):
+    products = Product.objects.filter(seller=request.user)
+
+    return render(request, 'my_products.html', {
+        'products': products
+    })
+@login_required
+def add_product(request):
+    categories = Category.objects.all()
+
+    if request.method == "POST":
+        name = request.POST.get("name")
+        price = request.POST.get("price")
+        stock = request.POST.get("stock")
+        category_id = request.POST.get("category")
+
+        image = request.FILES.get("image")
+
+        Product.objects.create(
+            seller=request.user,
+            name_uz=name,
+            price=price,
+            stock=stock,
+            category_id=category_id,
+            image=image
+        )
+
+        return redirect("my_products")
+
+    return render(request, "add_product.html", {
+        "categories": categories
+    })
+@login_required
+def edit_product(request, product_id):
+    product = get_object_or_404(Product, id=product_id, seller=request.user)
+    categories = Category.objects.all()
+
+    if request.method == "POST":
+        product.name_uz = request.POST.get("name_uz", "").strip()
+        product.name_en = request.POST.get("name_en", "").strip()
+        product.name_ru = request.POST.get("name_ru", "").strip()
+
+        product.description_uz = request.POST.get("description_uz", "").strip()
+        product.description_en = request.POST.get("description_en", "").strip()
+        product.description_ru = request.POST.get("description_ru", "").strip()
+
+        product.price = request.POST.get("price")
+        product.stock = request.POST.get("stock")
+        product.category_id = request.POST.get("category")
+
+        if request.FILES.get("image"):
+            product.image = request.FILES.get("image")
+
+        product.save()
+        return redirect("my_products")
+
+    return render(request, "edit_product.html", {
+        "product": product,
+        "categories": categories
+    })
+
+
+@login_required
+def delete_product(request, product_id):
+    product = get_object_or_404(Product, id=product_id, seller=request.user)
+
+    if request.method == "POST":
+        product.delete()
+        return redirect("my_products")
+
+    return render(request, "delete_product.html", {
+        "product": product
+    })
+def online_users_count(request):
+    limit_time = timezone.now() - timedelta(minutes=5)
+
+    count = User.objects.filter(
+        profile__last_seen__gte=limit_time
+    ).count()
+
+    return JsonResponse({
+        "online_users": count
+    })
+@login_required
+def unread_notifications_count(request):
+    count = Notification.objects.filter(
+        user=request.user,
+        is_read=False
+    ).count()
+
+    return JsonResponse({
+        "unread_count": count
+    })

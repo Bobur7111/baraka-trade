@@ -1,0 +1,163 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Profil | Baraka Market{% endblock %}
+
+{% block content %}
+
+<div class="max-w-5xl mx-auto">
+
+    <div class="bg-gradient-to-r from-green-600 to-emerald-500 rounded-3xl p-6 sm:p-8 text-white shadow-2xl mb-6">
+        <div class="flex flex-col md:flex-row items-center gap-6">
+
+            <div class="relative">
+                {% if request.user.profile.image %}
+                    <img src="{{ request.user.profile.image.url }}"
+                         class="w-32 h-32 rounded-full object-cover border-4 border-white shadow-xl">
+                {% else %}
+                    <div class="w-32 h-32 rounded-full bg-white text-green-700 flex items-center justify-center text-5xl font-bold border-4 border-white shadow-xl">
+                        {{ request.user.first_name|default:request.user.username|first|upper }}
+                    </div>
+                {% endif %}
+            </div>
+
+            <div class="text-center md:text-left flex-1">
+                <h1 class="text-3xl sm:text-4xl font-extrabold">
+                    {% if request.user.first_name or request.user.last_name %}
+                        {{ request.user.first_name }} {{ request.user.last_name }}
+                    {% else %}
+                        {{ request.user.username }}
+                    {% endif %}
+                </h1>
+
+                <p class="mt-2 text-white/90">@{{ request.user.username }}</p>
+
+                <div class="mt-4 flex flex-wrap justify-center md:justify-start gap-3">
+                    <span class="bg-white/20 px-4 py-2 rounded-full text-sm font-semibold">
+                        Role: {{ request.user.profile.role|title }}
+                    </span>
+
+                    <span class="bg-white/20 px-4 py-2 rounded-full text-sm font-semibold">
+                        📞 {{ request.user.profile.phone|default:"Telefon kiritilmagan" }}
+                    </span>
+
+                    <span class="bg-white/20 px-4 py-2 rounded-full text-sm font-semibold">
+                        📍 {{ request.user.profile.address|default:"Manzil kiritilmagan" }}
+                    </span>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <div class="lg:col-span-2 bg-white rounded-3xl shadow-xl p-6">
+            <h2 class="text-2xl font-bold text-gray-800 mb-5">
+                Profil ma’lumotlarini tahrirlash
+            </h2>
+
+            <form method="post" enctype="multipart/form-data" class="space-y-5">
+                {% csrf_token %}
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                    <div>
+                        <label class="block text-gray-700 font-semibold mb-2">Ism</label>
+                        <input type="text" name="first_name"
+                               value="{{ request.user.first_name }}"
+                               class="w-full border border-gray-300 rounded-2xl px-4 py-3 text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-500">
+                    </div>
+
+                    <div>
+                        <label class="block text-gray-700 font-semibold mb-2">Familya</label>
+                        <input type="text" name="last_name"
+                               value="{{ request.user.last_name }}"
+                               class="w-full border border-gray-300 rounded-2xl px-4 py-3 text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-500">
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block text-gray-700 font-semibold mb-2">Telefon raqam</label>
+                    <input type="text" name="phone"
+                           value="{{ request.user.profile.phone }}"
+                           placeholder="+998..."
+                           class="w-full border border-gray-300 rounded-2xl px-4 py-3 text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-500">
+                </div>
+
+                <div>
+                    <label class="block text-gray-700 font-semibold mb-2">Manzil</label>
+                    <input type="text" name="address"
+                           value="{{ request.user.profile.address }}"
+                           placeholder="Masalan: Toshkent, Chilonzor"
+                           class="w-full border border-gray-300 rounded-2xl px-4 py-3 text-gray-800 focus:outline-none focus:ring-2 focus:ring-green-500">
+                </div>
+
+                <div>
+                    <label class="block text-gray-700 font-semibold mb-2">Profil rasmi</label>
+                    <input type="file" name="image"
+                           class="w-full border border-gray-300 rounded-2xl px-4 py-3 text-gray-800 bg-gray-50">
+                </div>
+
+                <button type="submit"
+                        class="w-full md:w-auto bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-2xl font-bold shadow-lg transition">
+                    Saqlash
+                </button>
+            </form>
+        </div>
+
+        <div class="space-y-6">
+
+            <div class="bg-white rounded-3xl shadow-xl p-6">
+                <h3 class="text-xl font-bold text-gray-800 mb-4">Akkaunt holati</h3>
+
+                <div class="space-y-3 text-gray-700">
+                    <div class="flex justify-between">
+                        <span>Username:</span>
+                        <strong>@{{ request.user.username }}</strong>
+                    </div>
+
+                    <div class="flex justify-between">
+                        <span>Role:</span>
+                        <strong>{{ request.user.profile.role|title }}</strong>
+                    </div>
+
+                    <div class="flex justify-between">
+                        <span>Status:</span>
+                        <strong class="text-green-600">Active</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-gray-900 rounded-3xl shadow-xl p-6 text-white">
+                <h3 class="text-xl font-bold mb-4">Tezkor bo‘limlar</h3>
+
+                <div class="space-y-3">
+                    <a href="{% url 'home' %}"
+                       class="block bg-white/10 hover:bg-white/20 px-4 py-3 rounded-2xl transition">
+                        🛒 Marketplace
+                    </a>
+
+                    <a href="{% url 'cart_view' %}"
+                       class="block bg-white/10 hover:bg-white/20 px-4 py-3 rounded-2xl transition">
+                        🧺 Mening savatim
+                    </a>
+
+                    <a href="{% url 'b2b_entry' %}"
+                       class="block bg-white/10 hover:bg-white/20 px-4 py-3 rounded-2xl transition">
+                        🚀 B2B panel
+                    </a>
+
+                    <a href="{% url 'search_ai' %}"
+                       class="block bg-white/10 hover:bg-white/20 px-4 py-3 rounded-2xl transition">
+                        🤖 AI Search
+                    </a>
+                </div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div>
+
+{% endblock %}
