@@ -1,0 +1,214 @@
+{% extends "base.html" %}
+{% load static %}
+
+{% block content %}
+
+<div class="max-w-3xl mx-auto mt-10">
+
+    <div class="white-card bg-white text-gray-900 rounded-xl shadow-lg p-6">
+
+        <h2 class="text-2xl font-bold mb-4 text-gray-900 text-center">
+            🤖 Baraka AI Assistant
+        </h2>
+
+        <!-- CHAT BOX -->
+        <div id="chatBox"
+             class="h-96 overflow-y-auto border rounded-lg p-4 bg-gray-50 mb-4 space-y-3">
+
+            <div class="text-gray-500 text-sm">
+                Assalomu alaykum! Sizga qanday yordam bera olaman?
+            </div>
+
+        </div>
+
+        <!-- INPUT -->
+        <div class="flex gap-2">
+
+            <input
+                id="userInput"
+                type="text"
+                placeholder="Savolingizni kiriting..."
+                class="flex-1 border rounded-lg px-3 py-2 bg-white text-gray-900 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-green-500"
+            />
+
+            <button
+                onclick="sendMessage()"
+                class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg transition">
+                Yuborish
+            </button>
+
+        </div>
+
+    </div>
+
+</div>
+
+<script>
+
+// CHAT ELEMENT
+const chatBox = document.getElementById("chatBox")
+
+// USER MESSAGE
+function addUserMessage(text){
+    chatBox.innerHTML += `
+    <div class="flex justify-end">
+        <div class="bg-green-500 text-white px-3 py-2 rounded-lg max-w-xs shadow">
+            ${text}
+        </div>
+    </div>
+    `
+    chatBox.scrollTop = chatBox.scrollHeight
+}
+
+// BOT MESSAGE
+function addBotMessage(text){
+    chatBox.innerHTML += `
+    <div class="flex justify-start">
+        <div class="bg-gray-200 text-gray-900 px-3 py-2 rounded-lg max-w-xs shadow">
+            ${text}
+        </div>
+    </div>
+    `
+    chatBox.scrollTop = chatBox.scrollHeight
+}
+
+// PRODUCT CARD
+function addProductCard(product){
+    chatBox.innerHTML += `
+    <div class="flex justify-start">
+        <div class="bg-white text-gray-900 p-3 rounded-lg max-w-xs shadow border">
+
+            <img src="${product.image}" class="w-full h-32 object-cover rounded mb-2">
+
+            <div class="font-semibold text-sm mb-1">${product.name}</div>
+
+            <div class="text-green-600 font-bold mb-2">${product.price} UZS</div>
+
+            <button
+                onclick="addToCart(${product.id})"
+                class="bg-yellow-500 text-white px-3 py-1 rounded text-sm hover:bg-yellow-600">
+                🛒 Savatga qo‘shish
+            </button>
+
+        </div>
+    </div>
+    `
+    chatBox.scrollTop = chatBox.scrollHeight
+}
+
+// ADD TO CART
+async function addToCart(productId){
+    try{
+        let response = await fetch(`/add-to-cart/${productId}/`,{
+            method:"POST",
+            headers:{
+                "X-CSRFToken": csrftoken
+            }
+        })
+
+        let data = await response.json()
+
+        if(data.success){
+            addBotMessage("✅ Mahsulot savatga qo‘shildi")
+        }else{
+            addBotMessage("❌ Savatga qo‘shilmadi")
+        }
+
+    }catch(error){
+        addBotMessage("❌ Server xatosi")
+    }
+}
+
+// TYPING
+function showTyping(){
+    chatBox.innerHTML += `
+    <div id="typing" class="text-gray-500 text-sm">
+        AI yozmoqda...
+    </div>
+    `
+    chatBox.scrollTop = chatBox.scrollHeight
+}
+
+function removeTyping(){
+    let typing = document.getElementById("typing")
+    if(typing){
+        typing.remove()
+    }
+}
+
+// CSRF TOKEN
+function getCookie(name){
+    let cookieValue = null;
+
+    if (document.cookie && document.cookie !== '') {
+        let cookies = document.cookie.split(';');
+
+        for (let i = 0; i < cookies.length; i++) {
+            let cookie = cookies[i].trim();
+
+            if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                break;
+            }
+        }
+    }
+
+    return cookieValue;
+}
+
+const csrftoken = getCookie('csrftoken');
+
+// SEND MESSAGE
+async function sendMessage(){
+
+    let input = document.getElementById("userInput")
+    let message = input.value.trim()
+
+    if(!message) return
+
+    addUserMessage(message)
+    input.value = ""
+
+    showTyping()
+
+    try{
+
+        let response = await fetch("/chatbot/",{
+            method:"POST",
+            headers:{
+                "Content-Type":"application/json",
+                "X-CSRFToken": csrftoken
+            },
+            body:JSON.stringify({message:message})
+        })
+
+        let data = await response.json()
+        removeTyping()
+
+        if(data.type === "text"){
+            addBotMessage(data.reply)
+        }
+
+        if(data.type === "products"){
+            data.products.forEach(product=>{
+                addProductCard(product)
+            })
+        }
+
+    }catch(error){
+        removeTyping()
+        addBotMessage("Xatolik yuz berdi. Keyinroq urinib ko‘ring.")
+    }
+}
+
+// ENTER BOSILGANDA
+document.getElementById("userInput").addEventListener("keypress", function(e){
+    if(e.key === "Enter"){
+        e.preventDefault()
+        sendMessage()
+    }
+})
+
+</script>
+
+{% endblock %}

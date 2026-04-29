@@ -1,0 +1,87 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+    <meta charset="UTF-8">
+    <title>Kirish | Baraka Market</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+
+<body class="min-h-screen bg-gray-950 text-white flex items-center justify-center px-4">
+
+<div class="w-full max-w-5xl grid grid-cols-1 md:grid-cols-2 gap-6">
+
+    <!-- LOGIN -->
+    <div class="bg-white/10 backdrop-blur-xl rounded-2xl p-6 shadow-xl">
+        <h2 class="text-2xl font-bold mb-4">Kirish</h2>
+
+        <form method="post" action="{% url 'login' %}" class="space-y-4">
+            {% csrf_token %}
+
+            <input type="text" name="username" placeholder="Username" required
+                   class="w-full px-4 py-3 rounded-xl bg-white text-black outline-none">
+
+            <input type="password" name="password" placeholder="Parol" required
+                   class="w-full px-4 py-3 rounded-xl bg-white text-black outline-none">
+
+            <button type="submit"
+                    class="w-full bg-green-600 hover:bg-green-700 py-3 rounded-xl font-semibold">
+                Kirish
+            </button>
+        </form>
+
+        <div class="my-5 border-t border-white/20"></div>
+
+        <a href="/accounts/google/login/"
+           class="block text-center bg-red-600 hover:bg-red-700 py-3 rounded-xl font-semibold">
+            Google orqali kirish
+        </a>
+    </div>
+
+    <!-- REGISTER -->
+    <div class="bg-white/10 backdrop-blur-xl rounded-2xl p-6 shadow-xl">
+        <h2 class="text-2xl font-bold mb-4">Yangi akkaunt yaratish</h2>
+
+        <form method="post" action="{% url 'register' %}" class="space-y-4">
+            {% csrf_token %}
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <input type="text" name="first_name" placeholder="Ism" required
+                       class="w-full px-4 py-3 rounded-xl bg-white text-black outline-none">
+
+                <input type="text" name="last_name" placeholder="Familya" required
+                       class="w-full px-4 py-3 rounded-xl bg-white text-black outline-none">
+            </div>
+
+            <input type="text" name="username" placeholder="Username" required
+                   class="w-full px-4 py-3 rounded-xl bg-white text-black outline-none">
+
+            <input type="text" name="phone" placeholder="Telefon raqam: +998..." required
+                   class="w-full px-4 py-3 rounded-xl bg-white text-black outline-none">
+
+            <input type="text" name="address" placeholder="Manzil / shahar"
+                   class="w-full px-4 py-3 rounded-xl bg-white text-black outline-none">
+
+            <select name="role"
+                    class="w-full px-4 py-3 rounded-xl bg-white text-black outline-none">
+                <option value="customer">Customer — xaridor</option>
+                <option value="retailer">Retailer — do‘kon egasi</option>
+                <option value="distributor">Distributor</option>
+                <option value="supplier">Supplier</option>
+            </select>
+
+            <input type="password" name="password" placeholder="Parol" required
+                   class="w-full px-4 py-3 rounded-xl bg-white text-black outline-none">
+
+            <button type="submit"
+                    class="w-full bg-blue-600 hover:bg-blue-700 py-3 rounded-xl font-semibold">
+                Ro‘yxatdan o‘tish
+            </button>
+        </form>
+    </div>
+
+</div>
+
+</body>
+</html>

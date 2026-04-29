@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+
+<style>
+
+body{
+background:#f3f4f6;
+font-family:monospace;
+display:flex;
+justify-content:center;
+align-items:center;
+height:100vh;
+}
+
+/* RECEIPT PAPER */
+.receipt{
+width:360px;
+background:white;
+padding:20px;
+position:relative;
+box-shadow:0 20px 50px rgba(0,0,0,0.15);
+animation:fadeIn 0.6s ease;
+}
+
+/* ZIGZAG */
+.receipt:before,
+.receipt:after{
+content:"";
+position:absolute;
+left:0;
+width:100%;
+height:15px;
+background:
+linear-gradient(-45deg, white 75%, transparent 75%) 0 0,
+linear-gradient(45deg, white 75%, transparent 75%) 0 0;
+background-size:15px 15px;
+}
+
+.receipt:before{
+top:-10px;
+}
+
+.receipt:after{
+bottom:-10px;
+transform:rotate(180deg);
+}
+
+/* HEADER */
+.title{
+text-align:center;
+font-weight:bold;
+font-size:20px;
+margin-bottom:10px;
+}
+
+.info{
+font-size:12px;
+margin-bottom:10px;
+}
+
+/* LINE */
+.line{
+display:flex;
+justify-content:space-between;
+margin:5px 0;
+}
+
+.divider{
+border-top:1px dashed #999;
+margin:10px 0;
+}
+
+.total{
+font-weight:bold;
+font-size:16px;
+}
+
+/* SUCCESS */
+.success{
+text-align:center;
+color:green;
+font-weight:bold;
+margin-top:10px;
+}
+
+/* ANIMATION */
+@keyframes fadeIn{
+from{opacity:0; transform:translateY(20px);}
+to{opacity:1;}
+}
+
+</style>
+
+</head>
+
+<body>
+
+<div class="receipt">
+
+<div class="title">🧾 BARAKA MARKET</div>
+
+<div class="info">
+Order ID: #{{ order.code }} <br>
+Sana: {{ order.created_at }} <br>
+Restaurant: {{ order.restaurant.name }}
+</div>
+
+<div class="divider"></div>
+
+{% for item in items %}
+<div class="line">
+<span>{{ item.food.name }} x{{ item.quantity }}</span>
+<span>{{ item.food.price }}</span>
+</div>
+{% endfor %}
+
+<div class="divider"></div>
+
+<div class="line total">
+<span>Jami</span>
+<span>{{ total }} so'm</span>
+</div>
+
+<div class="divider"></div>
+
+<div class="info">
+💳 To‘lov: {{ order.foodpayment.payment_type }} <br>
+📍 Manzil: {{ order.address }} <br>
+🚴 Kuryer: {{ order.courier.name|default:"Tayinlanmoqda..." }} <br>
+⏱ Yetkazish: {{ order.estimated_time }} min
+</div>
+
+<div class="success">
+✅ To‘lov muvaffaqiyatli!
+</div>
+
+</div>
+
+</body>
+</html>

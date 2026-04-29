@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+{% load static %}
+{% load lang_extras %}
+
+{% block title %}{{ product|tr:current_lang }} - Baraka Market{% endblock %}
+
+{% block content %}
+<div class="bg-white shadow-2xl rounded-2xl p-8 flex flex-col md:flex-row gap-8">
+
+    <div class="md:w-1/2">
+        {% if product.image %}
+        <img src="{{ product.image.url }}" class="w-full h-96 object-cover rounded-2xl">
+        {% endif %}
+    </div>
+
+    <div class="md:w-1/2">
+        <h1 class="text-4xl font-bold">
+            {{ product|tr:current_lang }}
+        </h1>
+
+        <p class="text-green-600 text-2xl font-semibold mt-3">
+            {{ product.price }} {{ t.currency }}
+        </p>
+
+        <p class="text-gray-700 mt-4">
+            {{ product|tr_desc:current_lang }}
+        </p>
+
+        <form method="post" action="{% url 'add_to_cart' product.id %}" class="mt-6">
+            {% csrf_token %}
+            <button class="bg-yellow-500 text-white px-6 py-3 rounded-xl">
+                🛒 {{ t.add_to_cart }}
+            </button>
+        </form>
+    </div>
+</div>
+{% endblock %}

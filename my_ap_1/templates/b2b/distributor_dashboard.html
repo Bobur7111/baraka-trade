@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+
+{% block title %}
+Distribyutor Paneli
+{% endblock %}
+
+{% block content %}
+
+<div class="bg-gray-100 text-gray-900 p-10 rounded-xl">
+
+    <h1 class="text-3xl font-bold mb-8">
+        🚚 Bravo Distribyutor Markazi
+    </h1>
+
+    <div class="bg-white text-gray-900 p-6 rounded-xl shadow mb-8">
+        <table class="w-full text-left border-collapse">
+            <thead>
+                <tr class="border-b text-gray-700">
+                    <th class="py-2">Do‘kon</th>
+                    <th class="py-2">Mahsulot</th>
+                    <th class="py-2">Miqdor</th>
+                    <th class="py-2">Status</th>
+                    <th class="py-2">Harakat</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                {% for request in requests %}
+                <tr class="border-b">
+                    <td class="py-3">
+                        {{ request.retailer.username }}
+                    </td>
+
+                    <td class="py-3">
+                        {{ request.product.name_uz }}
+                    </td>
+
+                    <td class="py-3">
+                        {{ request.quantity }} dona
+                    </td>
+
+                    <td class="py-3">
+                        {% if request.status == "pending" %}
+                        <span class="bg-yellow-400 text-black px-3 py-1 rounded font-medium">
+                            Kutilmoqda
+                        </span>
+                        {% elif request.status == "sent" %}
+                        <span class="bg-green-500 text-white px-3 py-1 rounded font-medium">
+                            Yuborildi
+                        </span>
+                        {% else %}
+                        <span class="bg-gray-200 text-gray-700 px-3 py-1 rounded font-medium">
+                            Noma’lum
+                        </span>
+                        {% endif %}
+                    </td>
+
+                    <td class="py-3">
+                        {% if request.status == "pending" %}
+                        <a href="{% url 'approve_request' request.id %}"
+                           class="inline-block bg-blue-600 hover:bg-blue-700 text-white px-4 py-1 rounded">
+                            Yuborish
+                        </a>
+                        {% else %}
+                        <span class="text-gray-400">
+                            Yuborilgan
+                        </span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center py-4 text-gray-500">
+                        Hozircha so‘rovlar yo‘q
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="bg-white text-gray-900 p-6 rounded-xl shadow">
+        <h2 class="text-xl font-bold mb-4">
+            📦 Logistika Statusi
+        </h2>
+
+        <p>
+            Maxsus taksi orqali yetkazib berish – 2 soat ichida yetkaziladi.
+        </p>
+
+        <p class="mt-4 text-sm text-gray-500">
+            Backend logika:
+            So‘rov qabul qilish → Ombor tekshirish → Logistika API → Tracking
+        </p>
+    </div>
+
+</div>
+
+{% endblock %}
